@@ -1,0 +1,32 @@
+# LearnedFP per-key CNN training, Bayesian (GP) hyperparameter search.
+# Paper §5.2 (DRAWNAPART matched comparison) + Appendix C (search space).
+#
+# Search space (10-D, see paper Appendix C):
+#   base_channels ∈ [16, 64], blocks ∈ [2, 4], ksize ∈ {3, 5},
+#   dropout ∈ [0, 0.5], lr ∈ [1e-4, 3e-3] log-uniform,
+#   weight_decay ∈ [1e-6, 1e-3] log-uniform,
+#   label_smoothing ∈ [0, 0.1], batch_size ∈ {128, 256, 512},
+#   ema_decay ∈ {0, 0.99, 0.999}, warmup_epochs ∈ [1, 3]
+
+variant: bayes
+seed: 42
+keys: AUTO9
+gpu: true
+
+# Data split
+test_frac: 0.20
+val_frac_in_cal: 0.20
+
+# Bayesian-search budget (must match DRAWNAPART's, paper §5.2 / Appendix C)
+search_trials: 79
+search_epochs: 5
+
+# Final retrain on cal ∪ val with the best hyperparameters
+epochs: 30
+
+# Vote-time settings
+batch_size: 256
+n_test_per_key: 5
+per_key_trace_agg: logit_mean
+fuse_mode: logit_sum
+topk: "1,5,10,20"

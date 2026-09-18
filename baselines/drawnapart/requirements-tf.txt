@@ -1,0 +1,11 @@
+# DRAWNAPART baseline — step 1 of 2: the TensorFlow side. Install this file
+# FIRST, then requirements.txt. See requirements.txt for why the order matters.
+#
+# tensorflow_addons supplies TripletSemiHardLoss and ships no Linux aarch64
+# wheel, so it is gated on x86_64; where it is absent dp_keras_baseline.py
+# falls back to a local semi-hard triplet loss and records which one ran in
+# keras_meta.json. The paper's numbers were produced with tensorflow_addons.
+
+tensorflow==2.13.1
+tensorflow_addons==0.21.0; platform_machine == "x86_64"
+numpy>=1.23,<2

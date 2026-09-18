@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Alpha canonicalization probe</title>
+  <style>
+    body { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; margin: 16px; color: #222; }
+    h1 { font-size: 14px; }
+    .pass { color: #0a7a0a; }
+    .fail { color: #c00; font-weight: bold; }
+    #c { border: 1px solid #ccc; background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 50% / 20px 20px; }
+    pre { background: #f6f6f6; padding: 6px; max-height: 200px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>Alpha canonicalization probe</h1>
+  <p>Paints pixels with A=0 but RGB != 0 via putImageData. Under the extension, all such pixels must read back with RGB = 0 (no transparent-pixel hidden channel).</p>
+  <p class="pass" style="font-size:11px">note: Chrome's premultiplied storage already zeros A=0 pixels on readback, so this test often passes natively too. It still guards against regressions if the sanitize path breaks.</p>
+  <canvas id="c" width="100" height="100"></canvas>
+  <div id="out" style="margin-top:10px;">running...</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  // Every pixel: A=0 but RGB carries a hidden marker.
+  const im = ctx.createImageData(100, 100);
+  for (let i = 0; i < im.data.length; i += 4) {
+    im.data[i]     = 255;
+    im.data[i + 1] = 128;
+    im.data[i + 2] = 64;
+    im.data[i + 3] = 0;
+  }
+  ctx.putImageData(im, 0, 0);
+
+  // Partial region with A=64 (should survive as nonzero).
+  const partial = ctx.createImageData(20, 20);
+  for (let i = 0; i < partial.data.length; i += 4) {
+    partial.data[i]     = 100;
+    partial.data[i + 1] = 150;
+    partial.data[i + 2] = 200;
+    partial.data[i + 3] = 64;
+  }
+  ctx.putImageData(partial, 0, 0);
+
+  const out = ctx.getImageData(0, 0, 100, 100).data;
+
+  let transparentViolations = 0;
+  let opaqueOk = true;
+  let firstBadIdx = -1;
+
+  for (let y = 0; y < 100; y++) {
+    for (let x = 0; x < 100; x++) {
+      const i = (y * 100 + x) * 4;
+      const a = out[i + 3];
+      if (a === 0) {
+        if (out[i] !== 0 || out[i + 1] !== 0 || out[i + 2] !== 0) {
+          transparentViolations++;
+          if (firstBadIdx < 0) firstBadIdx = i;
+        }
+      } else if (x < 20 && y < 20) {
+        // A=64 region: readback may differ from input due to premultiply
+        // round-trip, but RGB must not collapse to all zero.
+        if (out[i] === 0 && out[i + 1] === 0 && out[i + 2] === 0) {
+          opaqueOk = false;
+        }
+      }
+    }
+  }
+
+  const r = document.getElementById('out');
+  const parts = [];
+  parts.push(
+    transparentViolations === 0
+      ? '<div class="pass">[PASS] transparent pixels canonicalized (A=0 -> RGB=0)</div>'
+      : `<div class="fail">[FAIL] ${transparentViolations} transparent pixel(s) still carry RGB</div>`
+  );
+  parts.push(
+    opaqueOk
+      ? '<div class="pass">[PASS] opaque (A=64) pixels preserved</div>'
+      : '<div class="fail">[FAIL] opaque / partial-alpha pixels lost</div>'
+  );
+  if (firstBadIdx >= 0) {
+    const i = firstBadIdx;
+    parts.push(`<pre>first offending pixel idx ${i}: R=${out[i]} G=${out[i+1]} B=${out[i+2]} A=${out[i+3]}</pre>`);
+  }
+  r.innerHTML = parts.join('');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "fpjs-collector",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal Express collector for the FingerprintJS baseline.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@fingerprintjs/fingerprintjs": "^4.6.2",
+    "express": "^4.18.2"
+  }
+}

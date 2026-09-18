@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OffscreenCanvas probe</title>
+  <style>
+    body { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; margin: 16px; color: #222; }
+    h1 { font-size: 14px; }
+    .pass { color: #0a7a0a; }
+    .fail { color: #c00; font-weight: bold; }
+    .info { color: #777; font-size: 11px; }
+    #out > div { padding: 2px 0; }
+  </style>
+</head>
+<body>
+  <h1>OffscreenCanvas probe</h1>
+  <p>Verifies that <code>OffscreenCanvas</code> extraction goes through the same
+  per-frame budget and the same three modes as <code>HTMLCanvasElement</code>:
+  30 reads with a repaint before most of them, the fidelity of a paint fixed at
+  its first read (reads 4-5 and 21-22 re-read the previous paint), and one
+  shared budget for both canvas kinds.</p>
+  <p class="info">Requires the default thresholds: coarse=3, block=20. Each
+  page load starts with a fresh budget; reload to re-run.</p>
+  <div id="out">running...</div>
+
+<script>
+(async () => {
+  const results = [];
+  function rec(name, ok) { results.push({ name, ok }); }
+  function eqBytes(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+  function isUniformGray(a) {
+    for (let i = 0; i < a.length; i += 4) {
+      if (a[i] !== 127 || a[i+1] !== 127 || a[i+2] !== 127 || a[i+3] !== 255) return false;
+    }
+    return true;
+  }
+  function allLowNibbleZero(a) {
+    for (let i = 0; i < a.length; i += 4) {
+      if ((a[i] & 0x0F) || (a[i+1] & 0x0F) || (a[i+2] & 0x0F)) return false;
+    }
+    return true;
+  }
+
+  if (typeof OffscreenCanvas === 'undefined') {
+    document.getElementById('out').innerHTML =
+      '<div class="fail">[FAIL] OffscreenCanvas not available in this browser</div>';
+    return;
+  }
+
+  const oc = new OffscreenCanvas(100, 100);
+  const ctx = oc.getContext('2d');
+
+  // Deterministic mixed content; every call is a new paint.
+  function paint() {
+    ctx.fillStyle = '#ff3366';
+    ctx.fillRect(0, 0, 100, 100);
+    ctx.fillStyle = 'rgba(30, 150, 200, 0.85)';
+    ctx.fillRect(20, 20, 60, 60);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px serif';
+    ctx.fillText('OC', 32, 58);
+  }
+
+  // Drive the budget ladder via OC.getImageData. Reads 4-5 and 21-22
+  // re-read the previous paint; every other read follows a fresh paint.
+  // As in modes.html, fresh paints are compared on the property of their
+  // band, not byte for byte.
+  const reads = [];
+  for (let i = 1; i <= 30; i++) {
+    const rereadsPrevious = (i === 4 || i === 5 || i === 21 || i === 22);
+    if (!rereadsPrevious) paint();
+    reads.push(ctx.getImageData(0, 0, 100, 100).data);
+  }
+  const read = (i) => reads[i - 1];
+
+  rec('OC reads 1-3 (normal, fresh paints) keep full precision (low RGB nibbles present)',
+      !allLowNibbleZero(read(1)) && !allLowNibbleZero(read(2)) && !allLowNibbleZero(read(3)));
+  rec('OC reads 4-5 (same paint as read 3) are byte-identical to read 3',
+      eqBytes(read(3), read(4)) && eqBytes(read(3), read(5)));
+  rec('OC reads 6-20 (coarse, fresh paints) have low RGB nibbles zeroed',
+      allLowNibbleZero(read(6)) && allLowNibbleZero(read(10)) && allLowNibbleZero(read(20)));
+  rec('OC reads 21-22 (same paint as read 20) are byte-identical to read 20',
+      eqBytes(read(20), read(21)) && eqBytes(read(20), read(22)));
+  rec('OC reads 23+ (block, fresh paints) are uniform gray (127,127,127,255)',
+      isUniformGray(read(23)) && isUniformGray(read(30)));
+
+  // convertToBlob is a readback too (read 31, block).
+  try {
+    const blob = await oc.convertToBlob({ type: 'image/png' });
+    rec('OC convertToBlob returns a non-empty Blob',
+        blob instanceof Blob && blob.size > 0);
+  } catch (err) {
+    rec('OC convertToBlob returns a non-empty Blob (threw: ' + err.message + ')', false);
+  }
+
+  // The budget is per frame, not per canvas kind: a fresh HTMLCanvasElement
+  // first read now (read 32) starts in block mode.
+  const htmlCanvas = document.createElement('canvas');
+  htmlCanvas.width = 50; htmlCanvas.height = 50;
+  const hctx = htmlCanvas.getContext('2d');
+  hctx.fillStyle = 'blue';
+  hctx.fillRect(0, 0, 50, 50);
+  const htmlRead = hctx.getImageData(0, 0, 50, 50).data;
+  rec('HTMLCanvas read after OC exhausts the budget is also block (shared budget)',
+      isUniformGray(htmlRead));
+
+  document.getElementById('out').innerHTML = results.map(r =>
+    `<div class="${r.ok ? 'pass' : 'fail'}">[${r.ok ? 'PASS' : 'FAIL'}] ${r.name}</div>`
+  ).join('');
+})();
+</script>
+</body>
+</html>

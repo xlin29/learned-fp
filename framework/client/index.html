@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>LearnedFP</title>
+  <style>
+    :root{
+      --primary:#2563eb; --primary-600:#1d4ed8; --ok:#10b981; --warn:#f59e0b;
+      --bg:#f9fafb; --card:#fff; --border:#e5e7eb; --muted:#6b7280; --ink:#111;
+      --vh: 1vh;
+    }
+    html{font-size:17px}
+    html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    .content{max-width:960px;margin:0 auto;padding:28px;padding-left:max(16px, env(safe-area-inset-left));padding-right:max(16px, env(safe-area-inset-right));padding-bottom:max(28px, env(safe-area-inset-bottom));}
+    h1{margin:0 0 8px;font-size:clamp(1.4rem, 2.8vw, 1.75rem)}
+    p.lead{margin:0 0 16px;color:var(--muted);font-size:clamp(1rem, 2vw, 1.1rem);line-height:1.55}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+    .row{display:grid;grid-template-columns:1fr;gap:16px}
+    .status-banner{border-radius:12px;padding:14px 16px;border:1px solid var(--border);background:#fff;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;font-weight:700}
+    .pill.run{background:#fff7ed;border:1px solid #fed7aa;color:var(--warn)}
+    .pill.done{background:#ecfdf5;border:1px solid #bbf7d0;color:var(--ok)}
+    .steps{display:grid;grid-template-columns:1fr;gap:10px}
+    .step{background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;min-height:44px}
+    .step.running{border-color:#f59e0b}
+    .step.done{border-color:#10b981;background:#ecfdf5}
+    .dot{width:12px;height:12px;border-radius:50%;background:#d1d5db;flex:0 0 12px}
+    .step.running .dot{background:#f59e0b}
+    .step.done .dot{background:#10b981}
+    .iframe-wrap{background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px}
+    iframe{width:100%;height:clamp(20px,20dvh,80px);border:0;background:#fff;margin-bottom:12px;}
+    .btn{appearance:none;border:0;cursor:pointer;font-weight:900;letter-spacing:.3px;padding:14px 22px;border-radius:14px;font-size:1.05rem;color:#fff;background:linear-gradient(135deg,#2563eb,#1d4ed8);box-shadow:0 6px 14px rgba(37,99,235,.3);min-height:44px}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .result-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:12px;font-size:15px}
+    .result-card h3{margin:0 0 10px;font-size:1.1rem}
+    .result-card .kv{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+    .result-card .kv span{background:#f3f4f6;padding:4px 10px;border-radius:999px;font-size:13px}
+    .match-table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+    .match-table th,.match-table td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)}
+    .match-table th{background:#f9fafb;font-weight:700}
+    .match-table tr.self{background:#ecfdf5;font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+    .err{color:var(--danger,#ef4444);font-size:14px}
+    /* Browser Defense Probe */
+    .probe-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px}
+    .probe-title{margin:0 0 4px;font-size:1.15rem;font-weight:700}
+    .probe-sub{margin:0 0 8px;color:var(--muted);font-size:15px;line-height:1.55}
+    .probe-table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+    .probe-table th{text-align:left;padding:6px 8px;background:#f9fafb;border-bottom:2px solid var(--border);font-weight:700}
+    .probe-table td{padding:6px 8px;border-bottom:1px solid var(--border)}
+    .match{color:var(--ok);font-weight:700}
+    /* Top navigation tabs */
+    .topnav{display:flex;gap:6px;margin:0 0 18px;border-bottom:2px solid var(--border);padding-bottom:0}
+    .topnav a{display:inline-block;padding:10px 16px;font-weight:700;font-size:1.05rem;color:var(--muted);text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s}
+    .topnav a:hover{color:var(--ink)}
+    .topnav a.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .page{display:none}
+    .page.active{display:block}
+    /* Show saved data panel */
+    .data-panel{border:1px solid var(--border);border-radius:12px;background:#fafafa;padding:12px 14px}
+    .data-panel-head{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-size:14px;color:var(--ink);margin-bottom:10px}
+    .data-panel-head .pill{display:inline-block;padding:2px 10px;border-radius:999px;background:#e0e7ff;color:#3730a3;font-weight:700;font-size:.78rem;letter-spacing:.04em;text-transform:uppercase}
+    .data-panel-head code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#fff;border:1px solid var(--border);padding:2px 6px;border-radius:6px;font-size:13px}
+    .data-panel details{margin-bottom:8px;border:1px solid var(--border);border-radius:8px;background:#fff;overflow:hidden}
+    .data-panel details[open]{box-shadow:0 1px 3px rgba(0,0,0,.04)}
+    .data-panel summary{cursor:pointer;padding:8px 12px;font-weight:700;font-size:14px;background:#f9fafb;list-style:none}
+    .data-panel summary::-webkit-details-marker{display:none}
+    .data-panel summary::before{content:"▶ ";color:var(--muted);font-size:11px;margin-right:4px;transition:transform .15s}
+    .data-panel details[open] summary::before{content:"▼ "}
+    .data-panel summary .file-meta{color:var(--muted);font-weight:400;font-size:12px;margin-left:6px}
+    .data-panel pre{margin:0;padding:10px 12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.5;color:#111;white-space:pre-wrap;overflow:auto;max-height:360px}
+    .data-panel .empty{color:var(--muted);font-style:italic;text-align:center;padding:20px 12px}
+  </style>
+</head>
+<body>
+  <div class="content" aria-live="polite">
+    <header>
+      <h1>LearnedFP</h1>
+    </header>
+
+    <nav class="topnav" role="tablist" aria-label="Sections">
+      <a href="#canvas" data-target="enroll-page" role="tab">Learned-FP on Canvas</a>
+      <a href="#probe" data-target="probe-page" role="tab">Browser Defense Probe</a>
+      <a href="#audio" data-target="audio-page" role="tab">Learned-FP on Web Audio</a>
+    </nav>
+
+    <section id="enroll-page" class="page card row">
+      <p class="probe-title" style="margin:0 0 4px">Learned-FP on Canvas</p>
+      <p class="probe-sub" style="margin:0 0 8px">
+        Captures <strong>100 samples</strong> across the 9 rendering keys (raw RGBA, server-seeded probes). Use <strong>Show images</strong> to inspect them.
+      </p>
+
+      <div id="banner" class="status-banner">
+        <span id="bannerPill" class="pill run">Initializing</span>
+        <span id="bannerText" style="color:var(--muted)">Waiting for probe…</span>
+      </div>
+
+      <div id="enrollControls" style="display:flex;margin-top:6px;margin-bottom:18px;gap:8px;flex-wrap:wrap;align-items:center">
+        <button id="btnEnroll" class="btn" type="button"
+                style="background:linear-gradient(135deg,#7c3aed,#5b21b6)">Run canvas probes</button>
+        <label style="color:var(--muted);font-size:15px;display:flex;align-items:center;gap:6px">
+          samples
+          <input id="canvasNs" type="number" min="1" max="100" value="100" style="width:64px;padding:4px 6px;font-family:ui-monospace,monospace">
+        </label>
+        <span style="color:var(--muted);font-size:14px">Paper default: 100. Each click clears the cookie.</span>
+      </div>
+
+      <div class="iframe-wrap" style="padding:6px;display:none" id="canvasFrameWrap">
+        <iframe id="canvasFrame" src="about:blank" referrerpolicy="no-referrer" title="Canvas probe runner" style="height:88px;margin:0;width:100%;border:1px solid var(--border);border-radius:8px;background:#fff"></iframe>
+      </div>
+
+      <div id="identifyControls" style="display:none;margin-top:6px;gap:8px;flex-wrap:wrap;align-items:center">
+        <button id="btnShowImages" class="btn" type="button" style="background:linear-gradient(135deg,#059669,#047857)">Show images</button>
+        <button id="btnShowData"   class="btn" type="button" style="background:linear-gradient(135deg,#f59e0b,#d97706)">Show saved data</button>
+        <span id="identifyStatus" style="color:var(--muted);font-size:14px"></span>
+      </div>
+
+      <iframe id="imagesFrame" title="Samples" style="display:none;width:100%;height:420px;border:1px solid var(--border);border-radius:12px;background:#fff;margin-top:12px"></iframe>
+      <div id="savedDataPanel" class="data-panel" style="display:none;margin-top:12px"></div>
+    </section>
+
+    <section id="probe-page" class="page probe-card">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+        <p class="probe-title">Browser Defense Probe</p>
+        <button id="btnProbe" class="btn" type="button" style="padding:8px 14px;font-size:0.95rem">Run Probe</button>
+        <span id="probeStatus" style="font-size:16px;font-weight:600;color:var(--ink)"></span>
+      </div>
+      <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-top:4px">
+        <div style="flex:0 0 auto">
+          <canvas id="probeShape" width="100" height="100"
+                  style="display:block;width:100px;height:100px;border:1px solid var(--border);border-radius:6px;background:repeating-conic-gradient(#f3f4f6 0% 25%,#fff 0% 50%) 50%/16px 16px"
+                  aria-label="probe shape preview"></canvas>
+          <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:4px;font-family:ui-monospace,monospace">fill, read ×2</div>
+        </div>
+        <div style="flex:0 0 auto">
+          <canvas id="probeShapeOsc" width="100" height="100"
+                  style="display:block;width:100px;height:100px;border:1px solid var(--border);border-radius:6px;background:repeating-conic-gradient(#f3f4f6 0% 25%,#fff 0% 50%) 50%/16px 16px"
+                  aria-label="OffscreenCanvas comparison shape preview"></canvas>
+          <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:4px;font-family:ui-monospace,monospace">α-edges, OSC</div>
+        </div>
+        <p class="probe-sub" style="flex:1 1 240px;min-width:240px;margin:0">
+          <strong>What it does:</strong> draws two 100×100 canvases. The first is an <code>rgba(100,150,200,0.5)</code> fill read back twice (the probe of Figure 7a in the paper). The second adds a semi-transparent circle with anti-aliased edges to the same fill and is read back once directly and once after a <code>drawImage</code> round-trip through an <code>OffscreenCanvas</code>. The rules of Figure 7b then classify which canvas defense, if any, is active.
+        </p>
+      </div>
+      <div id="probeResult" style="display:none;margin-top:8px">
+        <div id="probeBrowser" style="margin-bottom:12px"></div>
+        <div id="probeCharacterize" style="margin-bottom:12px"></div>
+        <details open style="border:1px solid var(--border);border-radius:8px;background:#fafafa;overflow:hidden">
+          <summary style="cursor:pointer;padding:8px 12px;font-weight:700;font-size:14px;background:#f9fafb">Classifier rules (Figure 7b)</summary>
+          <table class="probe-table" id="probeTable">
+            <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+            <tbody id="probeBody"></tbody>
+          </table>
+        </details>
+      </div>
+    </section>
+
+    <section id="audio-page" class="page card row">
+      <p class="probe-title" style="margin:0 0 4px">Learned-FP on Web Audio</p>
+      <p class="probe-sub" style="margin:0 0 8px">
+        Same workflow on the Web Audio surface: <strong>12 probes</strong> render in an <code>OfflineAudioContext</code> and upload as raw PCM.
+      </p>
+
+      <div id="audioBanner" class="status-banner">
+        <span id="audioPill" class="pill run">Initializing</span>
+        <span id="audioText" style="color:var(--muted)">Click "Run audio probes" to start.</span>
+      </div>
+
+      <div id="audioControls" style="display:flex;margin-top:6px;margin-bottom:18px;gap:8px;flex-wrap:wrap;align-items:center">
+        <button id="btnAudio" class="btn" type="button"
+                style="background:linear-gradient(135deg,#7c3aed,#5b21b6)">Run audio probes</button>
+        <button id="btnShowAudioData" class="btn" type="button"
+                style="background:linear-gradient(135deg,#f59e0b,#d97706)">Show saved data</button>
+        <label style="color:var(--muted);font-size:15px;display:flex;align-items:center;gap:6px">
+          samples
+          <input id="audioNs" type="number" min="1" max="60" value="60" style="width:64px;padding:4px 6px;font-family:ui-monospace,monospace">
+        </label>
+        <span style="color:var(--muted);font-size:14px">Paper default: 60. Each click clears the cookie.</span>
+      </div>
+
+      <div class="iframe-wrap" style="padding:6px;display:none" id="audioFrameWrap">
+        <iframe id="audioFrame" src="about:blank" referrerpolicy="no-referrer" title="Audio probe runner" style="height:88px;margin:0;width:100%;border:1px solid var(--border);border-radius:8px;background:#fff"></iframe>
+      </div>
+      <div id="audioDataPanel" class="data-panel" style="display:none;margin-top:12px"></div>
+    </section>
+  </div>
+
+  <script type="module">
+  // Tab navigation. Three pages — enroll (Learned-FP on Canvas, default),
+  // probe (Browser Defense Probe), and audio (Learned-FP on Web Audio) —
+  // toggled via URL hash. All sections stay in the DOM so the rest of the
+  // script can wire up DOM elements once at load time without caring
+  // which tab is currently visible.
+  function showPage(id){
+    document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === id));
+    document.querySelectorAll('.topnav a').forEach(a => a.classList.toggle('active', a.dataset.target === id));
+  }
+  function syncTabFromHash(){
+    const h = (location.hash || '').replace('#','').toLowerCase();
+    let target = 'enroll-page';
+    if (h === 'probe') target = 'probe-page';
+    else if (h === 'audio') target = 'audio-page';
+    else if (h === 'canvas' || h === 'enroll') target = 'enroll-page';
+    showPage(target);
+  }
+  window.addEventListener('hashchange', syncTabFromHash);
+  syncTabFromHash();
+
+  // viewport unit fix
+  function setVH(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh}px`); }
+  setVH(); window.addEventListener('resize', setVH);
+
+  // Render the static previews of the two probe canvases on top of the
+  // checkerboard background. Purely illustrative; the drawings match the
+  // ones made in the click handler: the rgba(100,150,200,0.5) fill that is
+  // read twice, and the alpha-edge canvas used for the OffscreenCanvas
+  // comparison.
+  (function drawProbeShapePreviews(){
+    const c = document.getElementById('probeShape');
+    const ctx = c && c.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = 'rgba(100,150,200,0.5)';
+      ctx.fillRect(0, 0, 100, 100);
+    }
+    const c2 = document.getElementById('probeShapeOsc');
+    const ctx2 = c2 && c2.getContext('2d');
+    if (ctx2) {
+      ctx2.fillStyle = 'rgba(100,150,200,0.5)'; ctx2.fillRect(0, 0, 100, 100);
+      ctx2.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx2.beginPath(); ctx2.arc(50, 50, 30, 0, Math.PI * 2); ctx2.fill();
+      ctx2.strokeStyle = 'rgba(0,0,0,0.85)'; ctx2.lineWidth = 1.5; ctx2.stroke();
+    }
+  })();
+
+  const $=s=>document.querySelector(s);
+  const canvasFrame=$('#canvasFrame');
+  const bannerPill=$('#bannerPill');
+  const bannerText=$('#bannerText');
+
+  // Minimal error reporter
+  function reportError(msg, err){
+    console.error('[Runner Error]', msg, err||'');
+    bannerPill.className='pill run';
+    bannerPill.textContent='Runner issue';
+    bannerText.textContent=String(msg).slice(0,180);
+  }
+  window.addEventListener('error', e => reportError(e.message, e.error));
+  window.addEventListener('unhandledrejection', e => reportError('Unhandled promise rejection', e.reason));
+
+  function bannerRunning(note=''){bannerPill.className='pill run';bannerPill.textContent='Drawing samples';bannerText.textContent=note||'Please wait…';}
+  function bannerDone(note=''){bannerPill.className='pill done';bannerPill.textContent='Capture complete';bannerText.textContent=note||'100 samples saved.';}
+
+  let currentVisit=null;
+  let waitingCanvas=false;
+
+  function loadVisit(){
+    try{
+      currentVisit='visit1';
+      waitingCanvas=true;
+      const banner = document.getElementById('banner');
+      if (banner) banner.style.display = '';
+      bannerRunning('');
+
+      const canvasUrl=new URL('/canvas.html',location.origin);
+      canvasUrl.searchParams.set('src','visit1');
+      const canvasNsInp = document.getElementById('canvasNs');
+      const canvasNs = Math.max(1, Math.min(100, Number(canvasNsInp?.value) || 100));
+      canvasUrl.searchParams.set('ns', String(canvasNs));
+      canvasUrl.searchParams.set('nc',Date.now());
+      const canvasFrameWrap = document.getElementById('canvasFrameWrap');
+      if (canvasFrameWrap) canvasFrameWrap.style.display = 'block';
+      canvasFrame.src=canvasUrl.toString();
+    }catch(err){ reportError('Failed to load visit iframe', err); }
+  }
+
+  function maybeCompleteVisit(){
+    if(!currentVisit) return;
+    if(waitingCanvas) return;
+    bannerDone('Click "Show images" to inspect the saved samples.');
+    currentVisit=null;
+    const ctl = document.getElementById('identifyControls');
+    if(ctl) ctl.style.display='flex';
+  }
+
+  // ---- show saved canvas images (rendered inside an iframe so the page stays short) ----
+  const btnShowImages = document.getElementById('btnShowImages');
+  const idStatus      = document.getElementById('identifyStatus');
+  const imagesFrame   = document.getElementById('imagesFrame');
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c =>
+      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  btnShowImages?.addEventListener('click', () => {
+    const showing = imagesFrame.style.display === 'block';
+    if (showing) {
+      imagesFrame.style.display = 'none';
+      imagesFrame.src = 'about:blank';
+      btnShowImages.textContent = 'Show images';
+      idStatus.textContent = '';
+      return;
+    }
+    idStatus.textContent = 'Loading images…';
+    imagesFrame.style.display = 'block';
+    btnShowImages.textContent = 'Hide images';
+    // bust cache + force reload so re-clicking refreshes
+    imagesFrame.src = '/images.html?nc=' + Date.now();
+    imagesFrame.onload = () => { idStatus.textContent = 'Images loaded.'; };
+    imagesFrame.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // ---- Show saved data: render every *.json the server wrote for this device ----
+  // Large arrays are truncated for display; pixelSample is kept whole because
+  // formatPixelSamples parses it as numbers.
+  function summarizeJsonForPanel(value) {
+    function trim(v, key = null) {
+      if (Array.isArray(v)) {
+        if (key === 'pixelSample') return v.slice();
+        if (v.length > 6) {
+          return [...v.slice(0, 3), `… ${v.length - 6} entries omitted …`, ...v.slice(-3)];
+        }
+        return v.map(x => trim(x));
+      }
+      if (v && typeof v === 'object') {
+        const out = {};
+        for (const k of Object.keys(v)) out[k] = trim(v[k], k);
+        return out;
+      }
+      return v;
+    }
+    return JSON.stringify(trim(value), null, 2);
+  }
+
+  // Display-only rewrite of the internal canvas key names (raw_faces,
+  // a-randomString, ...) to the paper names (EmojiFace, GlyphSet, ...);
+  // files on disk keep the internal names. Audio keys need no rewrite.
+  // Unanchored replaces on purpose: "_" is a word character, so \b would
+  // never match inside "_raw_faces_".
+  function applyPaperKeyNames(jsonStr, kind) {
+    if (kind !== 'canvas') return jsonStr;
+    return jsonStr
+      // Order matters: the longer raw_X prefix runs before the bare X.
+      .replace(/raw_faces/g,        'EmojiFace')
+      .replace(/raw_persons/g,      'EmojiPeople')
+      .replace(/raw_travel/g,       'EmojiObject')
+      .replace(/raw_hands/g,        'EmojiHand')
+      .replace(/raw_randomFont/g,   'GlyphSet')
+      .replace(/a-randomString/g,   'RandChar')
+      .replace(/shadowBlurProbe/g,  'ShadowBlur')
+      .replace(/gradQuantSteps/g,   'GradStep')
+      .replace(/moire/g,            'MoireLine')
+      // Bare cat values (no raw_ prefix; only inside validation entries).
+      .replace(/"cat":\s*"faces"/g,     '"cat": "EmojiFace"')
+      .replace(/"cat":\s*"persons"/g,   '"cat": "EmojiPeople"')
+      .replace(/"cat":\s*"travel"/g,    '"cat": "EmojiObject"')
+      .replace(/"cat":\s*"hands"/g,     '"cat": "EmojiHand"')
+      .replace(/"cat":\s*"randomFont"/g,'"cat": "GlyphSet"');
+  }
+
+  // Reformat the pixelSample arrays so each RGBA quadruple is shown as a
+  // single inline tuple instead of one number per line. JSON.stringify
+  // with indent=2 puts every primitive on its own line, which is unreadable
+  // for a 32-byte preview. Output looks like:
+  //   "pixelSample": [[100,150,200,128], [100,150,200,128], …]
+  function formatPixelSamples(jsonStr) {
+    return jsonStr.replace(
+      /"pixelSample":\s*\[([\s\S]*?)\]/g,
+      (_match, inner) => {
+        const nums = inner.split(/[,\s]+/).filter(s => s.length).map(Number);
+        const tuples = [];
+        for (let i = 0; i + 3 < nums.length; i += 4) {
+          tuples.push(`[${nums[i]},${nums[i + 1]},${nums[i + 2]},${nums[i + 3]}]`);
+        }
+        return `"pixelSample": [${tuples.join(', ')}]`;
+      },
+    );
+  }
+
+  function renderSavedData(payload, container, kind) {
+    if (!payload || !payload.ok) {
+      container.innerHTML = `<div class="empty">Failed to load saved data.</div>`;
+      container.style.display = 'block';
+      return;
+    }
+    if (!payload.exists) {
+      container.innerHTML = `<div class="empty">No data on disk yet — run an enrollment first.</div>`;
+      container.style.display = 'block';
+      return;
+    }
+    const fileNames = Object.keys(payload.files || {});
+    fileNames.sort();
+    const bufferLine = (kind === 'audio')
+      ? `<span><code>${payload.f32Count ?? 0}</code> .f32 buffers</span>`
+      : `<span><code>${payload.rgbaCount ?? 0}</code> .rgba samples</span>`;
+    const head = `
+      <div class="data-panel-head">
+        <span class="pill">${kind === 'audio' ? 'audio' : 'canvas'}</span>
+        ${bufferLine}
+        <span><code>${fileNames.length}</code> json files</span>
+      </div>`;
+    const blocks = fileNames.map(name => {
+      const value = payload.files[name];
+      const pretty = applyPaperKeyNames(formatPixelSamples(summarizeJsonForPanel(value)), kind);
+      // ndjson files come back as { entries: [...] } from the server. The
+      // entries array is the authoritative count (POSIX-atomic append, no
+      // race), so surface it here — otherwise the UI's display truncation
+      // makes it look like only 6 lines exist when there are really 900.
+      let countBadge = '';
+      if (Array.isArray(value?.entries)) {
+        const n = value.entries.length;
+        const note = n > 6 ? ' · showing first 3 + last 3' : '';
+        countBadge = ` <span class="file-meta">${n} entries${note}</span>`;
+      }
+      return `<details>
+        <summary>${escapeHtml(name)}${countBadge}</summary>
+        <pre>${escapeHtml(pretty)}</pre>
+      </details>`;
+    }).join('');
+    container.innerHTML = head + blocks;
+    container.style.display = 'block';
+  }
+
+  async function loadSavedData(panel, endpoint, kind) {
+    panel.style.display = 'block';
+    panel.innerHTML = `<div class="empty">Loading…</div>`;
+    try {
+      const r = await fetch(endpoint, { credentials: 'same-origin' });
+      const payload = await r.json();
+      renderSavedData(payload, panel, kind);
+    } catch (e) {
+      panel.innerHTML = `<div class="empty">Request failed: ${escapeHtml(String(e && e.message))}</div>`;
+    }
+  }
+
+  document.getElementById('btnShowData')?.addEventListener('click', () => {
+    const panel = document.getElementById('savedDataPanel');
+    if (!panel) return;
+    if (panel.style.display === 'block' && panel.dataset.loaded === '1') {
+      panel.style.display = 'none';
+      panel.dataset.loaded = '';
+      return;
+    }
+    panel.dataset.loaded = '1';
+    loadSavedData(panel, '/saved-data?src=visit1', 'canvas');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  document.getElementById('btnShowAudioData')?.addEventListener('click', () => {
+    const panel = document.getElementById('audioDataPanel');
+    if (!panel) return;
+    if (panel.style.display === 'block' && panel.dataset.loaded === '1') {
+      panel.style.display = 'none';
+      panel.dataset.loaded = '';
+      return;
+    }
+    panel.dataset.loaded = '1';
+    loadSavedData(panel, '/audio/saved-data?src=visit1', 'audio');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  window.addEventListener('message', (ev)=>{
+    if(!ev||!ev.data) return;
+    try{
+      if(ev.data.type==='canvas-status'){
+        const done=/done|skipped/i.test(ev.data.badge||ev.data.msg||'');
+        if(done){ waitingCanvas=false; }
+      }
+      if(ev.data.type==='audio-status'){
+        const badge = String(ev.data.badge || '');
+        const msg   = String(ev.data.msg   || '');
+        const aPill = document.getElementById('audioPill');
+        const aText = document.getElementById('audioText');
+        if (aPill && aText) {
+          if (badge === 'done')      { aPill.className = 'pill done'; aPill.textContent = 'Capture complete'; }
+          else if (badge === 'err')  { aPill.className = 'pill run';  aPill.textContent = 'Audio runner issue'; }
+          else                       { aPill.className = 'pill run';  aPill.textContent = 'Running probes'; }
+          if (msg) aText.textContent = msg;
+        }
+      }
+      maybeCompleteVisit();
+    }catch(err){ reportError('Message handling error', err); }
+  });
+
+  // ---- Audio probe runner (Learned-FP on Web Audio) ----
+  const btnAudio   = document.getElementById('btnAudio');
+  const audioNsInp = document.getElementById('audioNs');
+  const audioWrap  = document.getElementById('audioFrameWrap');
+  const audioFrame = document.getElementById('audioFrame');
+  const audioPill  = document.getElementById('audioPill');
+  const audioText  = document.getElementById('audioText');
+
+  btnAudio?.addEventListener('click', async () => {
+    btnAudio.disabled = true;
+    audioPill.className = 'pill run';
+    audioPill.textContent = 'Starting';
+    audioText.textContent = 'Clearing device cookie…';
+    try { await fetch('/clear-device', { method: 'POST' }); } catch {}
+
+    const ns = Math.max(1, Math.min(60, Number(audioNsInp?.value) || 5));
+    const u = new URL('/audio.html', location.origin);
+    u.searchParams.set('src', 'visit1');
+    u.searchParams.set('ns', String(ns));
+    u.searchParams.set('nc', String(Date.now()));
+
+    audioWrap.style.display = 'block';
+    audioFrame.src = u.toString();
+
+    // Re-enable the button when the iframe signals done or err.
+    const onceDone = (ev) => {
+      if (!ev || !ev.data || ev.data.type !== 'audio-status') return;
+      if (ev.data.badge === 'done' || ev.data.badge === 'err') {
+        btnAudio.disabled = false;
+        window.removeEventListener('message', onceDone);
+      }
+    };
+    window.addEventListener('message', onceDone);
+  });
+
+  // ---- Browser Defense Probe (ported from pixel_static) ----
+  function runDefenseProbe(){
+    return new Promise(resolve => {
+      const status = document.getElementById('probeStatus');
+      const resultDiv = document.getElementById('probeResult');
+      const browserDiv = document.getElementById('probeBrowser');
+      const tbody = document.getElementById('probeBody');
+      status.textContent = 'Running…';
+      resultDiv.style.display = 'none';
+
+      setTimeout(async () => {
+        const c = document.createElement('canvas');
+        c.width = 100; c.height = 100;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = 'rgba(100,150,200,0.5)';
+        ctx.fillRect(0, 0, 100, 100);
+        // Take NUM_READS independent getImageData snapshots up-front so the
+        // display can show read#N vs read#M equality directly, replacing the
+        // old "allSame"/"re-read stable" booleans with explicit comparisons.
+        const NUM_READS = 3;
+        const reads = [];
+        for (let r = 0; r < NUM_READS; r++) {
+          reads.push(new Uint8Array(ctx.getImageData(0, 0, 100, 100).data));
+        }
+        const d = reads[0];
+        function bytesEqual(a, b) {
+          if (a.length !== b.length) return false;
+          for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+          return true;
+        }
+        function bytesDiffCount(a, b) {
+          let n = 0;
+          for (let i = 0; i < a.length; i += 4) {
+            if (a[i] !== b[i] || a[i+1] !== b[i+1] || a[i+2] !== b[i+2] || a[i+3] !== b[i+3]) n++;
+          }
+          return n;
+        }
+        // readStable = every subsequent read equal to read#1 (byte-for-byte)
+        let readStable = true;
+        for (let i = 1; i < reads.length; i++) {
+          if (!bytesEqual(reads[0], reads[i])) { readStable = false; break; }
+        }
+        const eA = Math.round(0.5 * 255);
+        const eR = Math.round(Math.round(100 * eA / 255) * 255 / eA);
+        const eG = Math.round(Math.round(150 * eA / 255) * 255 / eA);
+        const eB = Math.round(Math.round(200 * eA / 255) * 255 / eA);
+
+        const checks = [];
+        let detected = 'none';
+
+        const torTile = d[0] !== d[4] && d[0] === d[32];
+        checks.push({ name: 'Tor tile (period 8)', pass: torTile,
+          detail: torTile
+            ? 'd[0]=' + d[0] + ' \u2260 d[4]=' + d[4] + ', d[0]=' + d[0] + ' === d[32]=' + d[32]
+            : 'd[0]=' + d[0] + ', d[4]=' + d[4] + ', d[32]=' + d[32] });
+        if (torTile) detected = 'tor';
+
+        // FP Spoofer returns a fake context whose .canvas is not the original
+        // element. Checked right after Tor: its (127,127,127,255) fill would
+        // otherwise trip the Safari Private rule below.
+        const fpSpoofer = detected === 'none' && ctx.canvas !== c;
+        checks.push({ name: 'FP Spoofer (ctx hijacked)', pass: fpSpoofer,
+          detail: 'ctx.canvas === canvas: ' + (ctx.canvas === c) + (fpSpoofer ? ', ctx.canvas.id=' + JSON.stringify(ctx.canvas.id) : '') });
+        if (fpSpoofer) detected = 'fp-spoofer';
+
+        // "uniform" answers: are all 10000 pixels in a single getImageData
+        // read identical to d[0..3]? When false, report the total count of
+        // pixels != d[0] and cite d[0] for reference.
+        let allSame = true, diffCount = 0;
+        for (let i = 4; i < d.length; i += 4) {
+          if (d[i] !== d[0] || d[i+1] !== d[1] || d[i+2] !== d[2] || d[i+3] !== d[3]) {
+            allSame = false;
+            diffCount++;
+          }
+        }
+        const uniformStr = allSame
+          ? 'uniform=true (all 10000 px = (' + d[0] + ',' + d[1] + ',' + d[2] + ',' + d[3] + '))'
+          : 'uniform=false (' + diffCount + '/9999 px \u2260 px[0]=(' +
+            d[0] + ',' + d[1] + ',' + d[2] + ',' + d[3] + '))';
+        const pixelDiff = d[0] !== eR || d[1] !== eG || d[2] !== eB || d[3] !== eA;
+        const maxChD = Math.max(
+          Math.abs(d[0] - eR), Math.abs(d[1] - eG),
+          Math.abs(d[2] - eB), Math.abs(d[3] - eA)
+        );
+        const substantialDiff = pixelDiff && maxChD >= 2;
+
+        const cfdHit = detected === 'none' && allSame && pixelDiff && !readStable;
+        checks.push({ name: 'CFP Defender (uniform shift, unstable)', pass: cfdHit,
+          detail: uniformStr + ', stable=' + readStable });
+        if (cfdHit) detected = 'canvas-defender';
+
+        let alphaOff = 0, alphaMin = 255, alphaMax = 0;
+        for (let i = 3; i < d.length; i += 4) {
+          if (d[i] < alphaMin) alphaMin = d[i];
+          if (d[i] > alphaMax) alphaMax = d[i];
+          if (d[i] !== eA) alphaOff++;
+        }
+
+        // Engine signature from the uniform-fill round-trip, without the user
+        // agent: Gecko floors the unpremultiply (R = 99), WebKit/Blink round
+        // (R = 100). Separates Safari Private from Firefox ETP Strict below.
+        const isFloorRounding = allSame && d[0] === eR - 1 && d[1] === eG && d[2] === eB && d[3] === eA;
+        const isRoundRounding = allSame && d[0] === eR     && d[1] === eG && d[2] === eB && d[3] === eA;
+
+        // OSC divergence probe (\u03b1-edge content): direct getImageData vs.
+        // drawImage round-trip via OffscreenCanvas. Computed here so both the
+        // Safari Private and Firefox 149 rules can share these values.
+        let oscDiffs = 0, oscMaxD = 0, oscDetail = 'OffscreenCanvas not supported';
+        try {
+          if (typeof OffscreenCanvas === 'function') {
+            const ec = document.createElement('canvas'); ec.width = 100; ec.height = 100;
+            const ectx = ec.getContext('2d');
+            ectx.fillStyle = 'rgba(100,150,200,0.5)'; ectx.fillRect(0, 0, 100, 100);
+            ectx.fillStyle = 'rgba(255,255,255,0.7)';
+            ectx.beginPath(); ectx.arc(50, 50, 30, 0, Math.PI * 2); ectx.fill();
+            ectx.strokeStyle = 'rgba(0,0,0,0.85)'; ectx.lineWidth = 1.5; ectx.stroke();
+            const direct = new Uint8Array(ectx.getImageData(0, 0, 100, 100).data.buffer);
+            const osc = new OffscreenCanvas(100, 100);
+            const oc = osc.getContext('2d', { willReadFrequently: true });
+            oc.drawImage(ec, 0, 0);
+            const oscRead = new Uint8Array(oc.getImageData(0, 0, 100, 100).data.buffer);
+            for (let i = 0; i < direct.length; i += 4) {
+              const m = Math.max(
+                Math.abs(direct[i]   - oscRead[i]),
+                Math.abs(direct[i+1] - oscRead[i+1]),
+                Math.abs(direct[i+2] - oscRead[i+2]),
+                Math.abs(direct[i+3] - oscRead[i+3])
+              );
+              if (m > 0) { oscDiffs++; if (m > oscMaxD) oscMaxD = m; }
+            }
+            oscDetail = 'diffs=' + oscDiffs + '/10000, max\u0394=' + oscMaxD;
+          }
+        } catch (e) { oscDetail = 'error: ' + e.message; }
+
+        // CanvasBlocker (kkapsner) has two modes: (a) a uniform shift on the
+        // simple fill, or (b) the simple fill untouched (Firefox baseline,
+        // R = 99) with the OSC canvas broadly perturbed. Both stable, alpha
+        // intact; the detail string says which matched.
+        const kkUniformHit = detected === 'none'
+                          && readStable
+                          && alphaOff === 0
+                          && (
+                               (allSame && substantialDiff)
+                               || (oscDiffs > 1000 && isFloorRounding)
+                             );
+        checks.push({ name: 'CanvasBlocker kkapsner', pass: kkUniformHit,
+          detail: uniformStr + ', max\u0394=' + maxChD + ', stable=' + readStable + ', oscDiffs=' + oscDiffs });
+        if (kkUniformHit) detected = 'canvasblocker-kkapsner';
+
+        // Safari Private: either \u03b1 perturbed on semi-transparent content,
+        // OR OSC divergence + WebKit/Blink rounding (R=100) on a uniform
+        // fill. Chromium doesn't have OSC divergence on this probe, so
+        // "OSC diverges AND uniform is WebKit-rounded" positively identifies
+        // Safari Private from pixels alone.
+        const safariAlphaHit = alphaOff > 0;
+        const safariOscHit   = oscDiffs > 0 && isRoundRounding;
+        const safariHit = detected === 'none' && (safariAlphaHit || safariOscHit);
+        const safariDetail = safariAlphaHit
+          ? alphaOff + ' pixels with \u03b1\u2260' + eA + ', range [' + alphaMin + '\u2013' + alphaMax + ']'
+          : safariOscHit
+            ? 'uniform R=' + d[0] + ' (WebKit/Blink round) + ' + oscDetail
+            : 'All \u03b1 = ' + eA + '; ' + oscDetail;
+        checks.push({ name: 'Safari Private (\u03b1 perturbed or WebKit-rounded+OSC)', pass: safariHit,
+          detail: safariDetail });
+        if (safariHit) detected = 'safari-private';
+
+        let maxD = 0, rClean = true, changed = 0, rOff = 0, gOff = 0, bOff = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          const dr = Math.abs(d[i] - eR), dg = Math.abs(d[i+1] - eG), db = Math.abs(d[i+2] - eB);
+          const mx = Math.max(dr, dg, db);
+          if (mx > maxD) maxD = mx;
+          if (d[i] !== eR) { rClean = false; rOff++; }
+          if (d[i+1] !== eG) gOff++;
+          if (d[i+2] !== eB) bOff++;
+          if (mx > 0) changed++;
+        }
+
+        let gridOff = 0, offGridOff = 0;
+        for (let y = 0; y < 100; y++) {
+          for (let x = 0; x < 100; x++) {
+            const i = (y * 100 + x) * 4;
+            if (d[i] !== eR || d[i+1] !== eG || d[i+2] !== eB) {
+              if (x % 10 === 0 && y % 10 === 0) gridOff++;
+              else offGridOff++;
+            }
+          }
+        }
+        const cbHit = detected === 'none' && gridOff > 0 && offGridOff === 0 && alphaOff === 0;
+        checks.push({ name: 'Canvas Blocker (grid pattern)', pass: cbHit,
+          detail: 'gridPixels=' + gridOff + '/100, offGrid=' + offGridOff + ', \u03b1Off=' + alphaOff });
+        if (cbHit) detected = 'canvas-blocker';
+
+        const samsungHit = detected === 'none' && rClean && maxD > 0;
+        checks.push({ name: 'Samsung SAT (R clean)', pass: samsungHit,
+          detail: 'max\u0394=' + maxD + ', rClean=' + rClean + ', G=' + gOff + ' B=' + bOff });
+        if (samsungHit) detected = 'samsung-sat';
+
+        const braveHit = detected === 'none' && !allSame && maxD > 0 && maxD <= 2;
+        checks.push({ name: 'Brave (max\u0394 \u2264 2, per-pixel)', pass: braveHit,
+          detail: 'max\u0394=' + maxD + ', changed=' + changed + '/10000, R=' + rOff + ' G=' + gOff + ' B=' + bOff + ', ' + uniformStr });
+        if (braveHit) detected = 'brave';
+
+        const firefoxHit = detected === 'none' && maxD > 2;
+        checks.push({ name: 'Firefox 144 ETP Strict (\u0394>2)', pass: firefoxHit,
+          detail: 'max\u0394=' + maxD + ', changed=' + changed + '/10000' });
+        if (firefoxHit) detected = 'firefox-strict';
+
+        // Firefox 149 ETP Strict: OSC divergence on \u03b1-edge content +
+        // Gecko rounding (R=99) on the uniform fill. Safari Private's rule
+        // above already claims OSC + R=100; this rule grabs the R=99 case
+        // from pixels alone.
+        const oscHit = detected === 'none' && oscDiffs > 0 && isFloorRounding;
+        checks.push({ name: 'Firefox 149 ETP Strict (OffscreenCanvas drawImage \u2260 direct)', pass: oscHit, detail: oscDetail });
+        if (oscHit) detected = 'firefox-fpp';
+
+        const firefoxDefault = detected === 'none' && allSame
+          && d[0] === eR - 1 && d[1] === eG && d[2] === eB && d[3] === eA;
+        checks.push({ name: 'Firefox default (floor-rounding, no defense)', pass: firefoxDefault,
+          detail: 'pixel=(' + d[0] + ',' + d[1] + ',' + d[2] + ',' + d[3] + '), expected=(' + eR + ',' + eG + ',' + eB + ',' + eA + ')' });
+        if (firefoxDefault) detected = 'firefox-default';
+
+        // === Cross-extraction-path probes (§6.2 / Table 4 characterization) ===
+        // These don't contribute to the first-match classifier above; they
+        // surface the Part=Full / Raw=PNG / URL=Blob signals the paper uses
+        // to characterize each defense (Brave, Samsung SAT, Tor, extensions).
+
+        // Part = Full: partial getImageData region vs sub-slice of full read.
+        let partDiff = 0, partMaxD = 0;
+        try {
+          const P = { x: 10, y: 10, w: 30, h: 30 };
+          const part = ctx.getImageData(P.x, P.y, P.w, P.h).data;
+          for (let yy = 0; yy < P.h; yy++) {
+            for (let xx = 0; xx < P.w; xx++) {
+              const pi = (yy * P.w + xx) * 4;
+              const fi = ((yy + P.y) * 100 + (xx + P.x)) * 4;
+              const m = Math.max(
+                Math.abs(part[pi]   - d[fi]),
+                Math.abs(part[pi+1] - d[fi+1]),
+                Math.abs(part[pi+2] - d[fi+2]),
+                Math.abs(part[pi+3] - d[fi+3])
+              );
+              if (m > 0) { partDiff++; if (m > partMaxD) partMaxD = m; }
+            }
+          }
+        } catch (e) { /* leave zeros */ }
+        const partEqFull = partDiff === 0;
+        const partFullDetail = partEqFull
+          ? 'partial 30\u00d730 region identical to sub-slice of full read'
+          : partDiff + ' px differ out of 900, max\u0394=' + partMaxD;
+
+        // Cached PNG outputs: 1 toDataURL + 2 toBlob (both kicked off in
+        // parallel). Px=PNG, URL=Blob, and toBlob-stable below all read
+        // from these caches instead of re-encoding. The two parallel
+        // toBlob calls overlap with the Image-decode step in Px=PNG, so
+        // their wall-clock cost is largely hidden.
+        let cachedUrlStr = null, cachedUrlBytes = null, blobP1 = null, blobP2 = null;
+        try {
+          cachedUrlStr = c.toDataURL('image/png');
+          cachedUrlBytes = Uint8Array.from(atob(cachedUrlStr.split(',')[1]), ch => ch.charCodeAt(0));
+          blobP1 = new Promise(res => c.toBlob(res, 'image/png'));
+          blobP2 = new Promise(res => c.toBlob(res, 'image/png'));
+        } catch (e) { /* leave nulls; downstream blocks degrade gracefully */ }
+
+        // Raw = PNG: decode the cached toDataURL into a fresh canvas and compare pixels.
+        let urlDiff = 0, urlMaxD = 0, urlDecodeOk = false, rawPngDetail = 'toDataURL decode skipped';
+        if (cachedUrlStr) {
+          try {
+            const img = new Image();
+            await new Promise((res, rej) => {
+              img.onload = res; img.onerror = () => rej(new Error('decode failed'));
+              img.src = cachedUrlStr;
+            });
+            const dc = document.createElement('canvas');
+            dc.width = 100; dc.height = 100;
+            const dctx = dc.getContext('2d');
+            dctx.drawImage(img, 0, 0);
+            const urlPix = dctx.getImageData(0, 0, 100, 100).data;
+            for (let i = 0; i < d.length; i += 4) {
+              const m = Math.max(
+                Math.abs(d[i]   - urlPix[i]),
+                Math.abs(d[i+1] - urlPix[i+1]),
+                Math.abs(d[i+2] - urlPix[i+2]),
+                Math.abs(d[i+3] - urlPix[i+3])
+              );
+              if (m > 0) { urlDiff++; if (m > urlMaxD) urlMaxD = m; }
+            }
+            urlDecodeOk = true;
+            rawPngDetail = urlDiff === 0
+              ? 'all 10000 px identical after PNG round-trip'
+              : urlDiff + ' px differ, max\u0394=' + urlMaxD;
+          } catch (e) { rawPngDetail = 'error: ' + e.message; }
+        }
+        const rawEqPng = urlDecodeOk && urlDiff === 0;
+
+        // URL = Blob: cached toDataURL bytes vs first toBlob bytes.
+        // Caches blob1's decoded bytes for the stability check below.
+        let urlEqBlob = false, urlBlobDetail = 'toBlob unavailable';
+        let blob1Bytes = null;
+        try {
+          const blob1 = blobP1 ? await blobP1 : null;
+          if (!cachedUrlBytes || !blob1) {
+            urlBlobDetail = 'toBlob returned null';
+          } else {
+            blob1Bytes = new Uint8Array(await blob1.arrayBuffer());
+            if (cachedUrlBytes.length !== blob1Bytes.length) {
+              urlBlobDetail = 'sizes differ: URL ' + cachedUrlBytes.length + 'B, Blob ' + blob1Bytes.length + 'B';
+            } else {
+              let firstMismatch = -1;
+              for (let i = 0; i < cachedUrlBytes.length; i++) {
+                if (cachedUrlBytes[i] !== blob1Bytes[i]) { firstMismatch = i; break; }
+              }
+              if (firstMismatch === -1) {
+                urlEqBlob = true;
+                urlBlobDetail = 'identical PNG byte streams (' + cachedUrlBytes.length + 'B)';
+              } else {
+                urlBlobDetail = cachedUrlBytes.length + 'B each, first mismatch @byte ' + firstMismatch;
+              }
+            }
+          }
+        } catch (e) { urlBlobDetail = 'error: ' + e.message; }
+
+        // toBlob repeated-call stability: per paper \u00a76.3, Brave returns
+        // different toBlob bytes on each invocation. blob1 and blob2 were
+        // both kicked off in parallel above; this block just waits on
+        // blob2 and compares to blob1's already-cached bytes.
+        let blobStable = false, blobStableDetail = 'toBlob unavailable';
+        try {
+          const blob2 = blobP2 ? await blobP2 : null;
+          if (!blob1Bytes || !blob2) {
+            blobStableDetail = 'toBlob returned null';
+          } else {
+            const u2 = new Uint8Array(await blob2.arrayBuffer());
+            if (blob1Bytes.length !== u2.length) {
+              blobStableDetail = 'call#1 ' + blob1Bytes.length + 'B, call#2 ' + u2.length + 'B (different sizes)';
+            } else {
+              let firstMismatch = -1;
+              for (let i = 0; i < blob1Bytes.length; i++) {
+                if (blob1Bytes[i] !== u2[i]) { firstMismatch = i; break; }
+              }
+              if (firstMismatch === -1) {
+                blobStable = true;
+                blobStableDetail = 'two toBlob calls byte-identical (' + blob1Bytes.length + 'B)';
+              } else {
+                blobStableDetail = blob1Bytes.length + 'B each, first byte mismatch @' + firstMismatch;
+              }
+            }
+          }
+        } catch (e) { blobStableDetail = 'error: ' + e.message; }
+
+        if (detected === 'none') {
+          checks.push({ name: 'No defense', pass: true, detail: 'All pixels = expected (' + eR + ',' + eG + ',' + eB + ',' + eA + ')' });
+        }
+
+        const labels = {
+          'fp-spoofer': '\ud83d\udd34 Fingerprint Spoofer (getContext hijacked)',
+          'tor': '\ud83d\udd34 Tor Browser (extraction blocking + 8-px tile)',
+          'canvas-defender': '\ud83d\udfe0 Canvas FP Defender (\u03b1 + RGB noise)',
+          'canvas-blocker': '\ud83d\udfe0 Canvas Blocker (sparse grid, RGB only)',
+          'canvasblocker-kkapsner': '\ud83d\udfe0 CanvasBlocker kkapsner (draw-time noise, stable re-read)',
+          'safari-private': '\ud83d\udfe0 Safari Private Browsing (\u03b1 + RGB perturbation, OSC cross-path)',
+          'brave': '\ud83d\udfe1 Brave Farbling (\u0394 \u2264 2 noise)',
+          'samsung-sat': '\ud83d\udfe1 Samsung Internet SAT Strict (G/B only, \u0394 \u2264 3)',
+          'firefox-strict': '\ud83d\udfe0 Firefox 144 ETP Strict (session-seeded RGB noise, \u0394>2)',
+          'firefox-fpp': '\ud83d\udfe0 Firefox 149 ETP Strict (OffscreenCanvas drawImage \u2260 direct getImageData on \u03b1-edges)',
+          'firefox-default': '\ud83d\udfe2 Firefox default (no canvas defense; floor-rounding gives R\u22121)',
+          'none': '\ud83d\udfe2 No canvas defense detected (clean, exact round-trip)'
+        };
+        const detLabel = labels[detected] || detected;
+        // Verdict card: single neutral style, just made big enough to
+        // be the obvious focal point of the probe section. The card
+        // doesn't try to convey severity — that's what the per-defense
+        // label text already does.
+        const emojiMatch = detLabel.match(/^\p{Emoji}\s*/u);
+        const verdictEmoji = emojiMatch ? emojiMatch[0].trim() : '';
+        const verdictText  = detLabel.replace(/^\p{Emoji}\s*/u, '');
+        browserDiv.innerHTML =
+          '<div style="background:#f8fafc;border:1px solid var(--border);border-left:4px solid var(--primary);' +
+          'border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:14px">' +
+            '<span style="font-size:2.2rem;line-height:1">' + verdictEmoji + '</span>' +
+            '<div style="min-width:0;flex:1">' +
+              '<div style="font-size:0.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Detected defense</div>' +
+              '<div style="font-size:1.25rem;font-weight:800;line-height:1.3;margin-top:3px;color:var(--ink)">' + escapeHtml(verdictText) + '</div>' +
+            '</div>' +
+          '</div>';
+
+        tbody.innerHTML = '';
+        for (const ch of checks) {
+          const tr = document.createElement('tr');
+          const icon = ch.pass ? '<span class="match" style="font-size:1.4rem">\u2713</span>' : '<span style="color:var(--muted);font-size:1.4rem">\u2717</span>';
+          tr.innerHTML = '<td style="font-weight:700">' + escapeHtml(ch.name) + '</td><td>' + icon + '</td>' +
+            '<td class="mono">' + escapeHtml(ch.detail) + '</td>';
+          tbody.appendChild(tr);
+        }
+
+        resultDiv.style.display = '';
+        status.textContent = 'Done.';
+        resolve(detected);
+      }, 50);
+    });
+  }
+
+  // wire enrollment start button. Each click clears the deviceId
+  // cookie via /clear-device, so the next /save-batch (issued from the
+  // canvas iframe) gets a fresh deviceId from issueDeviceIdIfNeeded.
+  // This makes every demo run independent — accumulated saves from
+  // earlier enrollments don't bias the identification result.
+  const enrollControls = document.getElementById('enrollControls');
+  const btnEnroll = document.getElementById('btnEnroll');
+  btnEnroll?.addEventListener('click', async () => {
+    btnEnroll.disabled = true;
+    enrollControls.style.display = 'none';
+    try { await fetch('/clear-device', { method: 'POST' }); } catch {}
+    loadVisit();
+  });
+
+  // Both flows are independent: probe is optional, enrollment can start
+  // any time. The banner is hidden by default and only re-appears once
+  // enrollment kicks off (via loadVisit) to show progress.
+  const banner = document.getElementById('banner');
+  if (banner) banner.style.display = 'none';
+  document.getElementById('btnProbe')?.addEventListener('click', () => {
+    runDefenseProbe();
+  });
+  </script>
+</body>
+</html>

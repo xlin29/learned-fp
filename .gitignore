@@ -1,0 +1,23 @@
+# Local working dirs that should never be committed.
+.lab_data_raw/
+.pipeline_raw/
+lab_data/.demo_extract/
+demo_out/
+out_bayes/
+out_3k/
+out_dp_*/
+baselines/drawnapart/.demo_data/
+baselines/drawnapart/.demo_out/
+baselines/drawnapart/.demo_config.yaml
+node_modules/
+__pycache__/
+*.py[co]
+
+# OS
+.DS_Store
+.idea/
+.vscode/
+.claude/
+
+# Staged for the GitHub release; not tracked.
+.release_assets/

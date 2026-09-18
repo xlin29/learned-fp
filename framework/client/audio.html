@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Audio probes</title>
+  <style>
+    :root { --primary:#7c3aed; --primary-dark:#5b21b6; --ok:#059669; --bg:#fff; --border:#e5e7eb; --muted:#6b7280; --ink:#111; }
+    html, body { margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:14px; }
+    .row { display:flex; align-items:center; gap:10px; padding:10px 12px; }
+    .pill { display:inline-block; padding:3px 10px; border-radius:999px; font-weight:700; font-size:.78rem; letter-spacing:.04em; text-transform:uppercase; }
+    .pill.run  { background:#fef3c7; color:#92400e; }
+    .pill.done { background:#dcfce7; color:#065f46; }
+    .pill.err  { background:#fee2e2; color:#991b1b; }
+    .progress { flex:1 1 240px; background:#f3f4f6; border-radius:6px; height:10px; overflow:hidden; min-width:120px; }
+    .bar { height:100%; background:linear-gradient(90deg, var(--primary), var(--primary-dark)); width:0%; transition:width .15s; }
+    .meta { color:var(--muted); font-size:14px; line-height:1.55; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; padding:0 12px 10px; }
+    .meta b { color:var(--ink); font-family:inherit; font-weight:700; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <span id="apPill" class="pill run">Idle</span>
+    <div class="progress"><div id="apBar" class="bar"></div></div>
+    <span id="apText">Loading probes…</span>
+  </div>
+  <div class="meta" id="apMeta"></div>
+
+  <script type="module">
+    const params = new URLSearchParams(location.search);
+    const src = (params.get('src') || 'visit1').replace(/[^a-zA-Z0-9_-]/g, '');
+    // Number of audio sub-sessions to render. Paper §7.1 uses 60 samples
+    // per campaign; we default to that here and let the host page
+    // override via ?ns= for faster smoke tests.
+    const ns = Math.max(1, Math.min(60, Number(params.get('ns')) || 60));
+
+    const pill = document.getElementById('apPill');
+    const text = document.getElementById('apText');
+    const bar  = document.getElementById('apBar');
+    const meta = document.getElementById('apMeta');
+
+    function status(badge, msg) {
+      pill.className = 'pill ' + (badge === 'done' ? 'done' : badge === 'err' ? 'err' : 'run');
+      pill.textContent = badge === 'done' ? 'Done' : badge === 'err' ? 'Error' : 'Running';
+      if (msg) text.textContent = msg;
+      // Forward to parent so the host page can advance its UI.
+      try {
+        window.parent.postMessage({ type: 'audio-status', badge, msg: text.textContent }, '*');
+      } catch {}
+    }
+
+    function setBar(pct) { bar.style.width = Math.max(0, Math.min(100, pct)).toFixed(1) + '%'; }
+
+    let probesDone = 0;
+    const totalProbes = 12 * ns;
+    self.addEventListener('ap:audio', (ev) => {
+      probesDone += 1;
+      const pct = (probesDone / totalProbes) * 100;
+      setBar(pct);
+      if (ev.detail && ev.detail.key) {
+        text.textContent = `Rendering ${ev.detail.key} (S${ev.detail.session})… ${probesDone}/${totalProbes}`;
+      }
+    });
+
+    async function run() {
+      const t0 = performance.now();
+
+      // Long Tasks API: every task > 50 ms is what freezes the cursor.
+      // We sum (duration - 50) over the run — same semantics as the
+      // Web Vitals "Total Blocking Time" metric. Falls back silently when
+      // longtask isn't supported (Safari, older Firefox).
+      let blockingMs = 0;
+      let longTaskObs = null;
+      try {
+        longTaskObs = new PerformanceObserver(list => {
+          for (const e of list.getEntries()) blockingMs += Math.max(0, e.duration - 50);
+        });
+        longTaskObs.observe({ entryTypes: ['longtask'] });
+      } catch { longTaskObs = null; }
+
+      try {
+        // 1) Bootstrap: ensures the deviceId cookie is set and surfaces the
+        //    audio config. Errors here mean the server isn't reachable.
+        const bootRes = await fetch('/audio/bootstrap', { credentials: 'same-origin' });
+        if (!bootRes.ok) throw new Error('bootstrap HTTP ' + bootRes.status);
+        const boot = await bootRes.json();
+
+        meta.innerHTML = `${boot.audio.keys.length} probes × ${ns} · ` +
+                         `${boot.audio.sampleRate} Hz`;
+
+        status('run', 'Loading frozen template…');
+
+        // 2) Load the per-session probe bundle (server-seeded jitter + freshness markers).
+        const frozenUrl = `/audio/pp/frozen.js?src=${encodeURIComponent(src)}&ns=${ns}&nc=${Date.now()}`;
+        const PP = await import(frozenUrl);
+        if (typeof PP.processAndSendAudioBATCH !== 'function') {
+          throw new Error('frozen template missing processAndSendAudioBATCH');
+        }
+
+        status('run', 'Rendering probes…');
+
+        // 3) Run probes. processAndSendAudioBATCH renders all 12 keys per
+        //    session into OfflineAudioContext, embeds the marker, and POSTs
+        //    each session's bundle to /audio/save-batch.
+        const summary = await PP.processAndSendAudioBATCH(`/audio/save-batch?src=${encodeURIComponent(src)}`);
+
+        const elapsed = performance.now() - t0;
+
+        // Stop the long-task observer before formatting so any post-run
+        // cleanup doesn't get attributed to the run window.
+        if (longTaskObs) { try { longTaskObs.disconnect(); } catch {} }
+
+        const failed = summary.failedBatches || 0;
+        const ok = summary.uploaded || 0;
+        const longTaskSupported = !!longTaskObs;
+        meta.innerHTML +=
+          ` · uploaded <b>${ok}</b>/${ok + failed} samples` +
+          ` · ${(summary.bytesUploaded / 1024).toFixed(1)} KB` +
+          (longTaskSupported ? ` · blocking <b>${blockingMs.toFixed(0)} ms</b>` : '') +
+          ` · render <b>${summary.renderMs.toFixed(0)} ms</b>` +
+          ` · upload <b>${summary.uploadMs.toFixed(0)} ms</b>`;
+
+        if (failed === 0) {
+          setBar(100);
+          status('done', `Saved ${ok} samples.`);
+        } else {
+          status('err', `Completed with ${failed} failed batch(es).`);
+        }
+      } catch (e) {
+        console.error('[audio] failed:', e);
+        status('err', String(e && e.message || e));
+      }
+    }
+
+    run();
+  </script>
+</body>
+</html>

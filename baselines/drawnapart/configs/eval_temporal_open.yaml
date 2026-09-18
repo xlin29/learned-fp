@@ -1,0 +1,27 @@
+# Open-world DRAWNAPART temporal-return eval (paper §5.3 / Figure 4).
+# Gallery = all trained T0 devices of the matched set. Query = each returning
+# device's first-k chronological return-visit ndjson samples. Companion to
+# the LearnedFP `pipeline/configs/temporal_chrono.yaml` open-world eval.
+#
+# Usage:
+#   python -m baselines.drawnapart.cli eval \
+#       --config baselines/drawnapart/configs/eval_temporal_open.yaml \
+#       --t0-root /path/to/matched_set_T0 \
+#       --t130-dir /path/to/returning_visits \
+#       --results-dir ./out_dp_results
+
+recipe: eval_temporal_open
+
+seed: 42
+gpu: true
+chronological: true
+
+# k-shot grid of the paper's runs.
+kshots: "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,22,24,26,28"
+topk: "1,5,10,20,50,100"
+
+# Same split parameters as the paired training run (mem-frac and
+# train-frac-within-mem must match so the eval reproduces the same gallery).
+mem_frac: 0.80
+train_frac_within_mem: 0.80
+min_trace_len: 1024

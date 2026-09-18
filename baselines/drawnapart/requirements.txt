@@ -1,0 +1,31 @@
+# DRAWNAPART baseline — step 2 of 2: the torch side. Install requirements-tf.txt
+# FIRST, then this file:
+#
+#   pip install -r baselines/drawnapart/requirements-tf.txt
+#   pip install -r baselines/drawnapart/requirements.txt
+#
+# Why two steps. TensorFlow 2.13.1 declares typing-extensions<4.6 and current
+# torch needs >=4.10. Given both in one resolution, pip satisfies TensorFlow's
+# bound by silently choosing a torch from 2023 (2.1.x), which is not the
+# environment the paper's evaluations ran in. Installed second, this file
+# upgrades typing-extensions past TensorFlow's declared bound; pip prints
+#
+#   ERROR: pip's dependency resolver does not currently take into account all
+#   the packages that are installed ... tensorflow 2.13.1 requires
+#   typing-extensions<4.6.0 ... incompatible.
+#
+# and exits 0. The text is a warning about a declared bound, not a failure:
+# TensorFlow 2.13.1 imports and runs with the newer typing-extensions, and this
+# is the sequence the paper's runs used and that this
+# release was verified with (TensorFlow 2.13.1, torch 2.14.0, typing-extensions
+# 4.16.0, scikit-learn 1.7.2, 2026-09-15).
+#
+# torch is not pinned to a CUDA build. For GPU training install your site's
+# wheel first, e.g.:
+#   pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch
+
+torch>=2.0,<3.0
+typing-extensions>=4.10
+scikit-learn>=1.2,<2
+PyYAML>=6.0,<7
+tqdm>=4.65,<5

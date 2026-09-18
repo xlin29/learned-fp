@@ -1,0 +1,29 @@
+# LearnedFP per-key CNN training, fixed default hyperparameters.
+# Paper §5.4 (scalability — 3,303 devices).
+#
+# Architecture: PixelCNN(base_channels=32, blocks=3, ksize=3, dropout=0.2).
+# This is the default backbone the paper reports for the full-scale run.
+
+variant: fixed
+seed: 42
+keys: AUTO9
+gpu: true
+
+# Optimizer / schedule
+epochs: 30
+batch_size: 256
+lr: 1.0e-3
+wd: 1.0e-4
+label_smoothing: 0.05
+ema: 0.999
+warmup_epochs: 1
+dropout: 0.2
+
+# Data split
+test_frac: 0.20
+
+# Vote-time settings
+n_test_per_key: 5
+per_key_trace_agg: logit_mean
+fuse_mode: logit_sum
+topk: "1,5,10,20"
