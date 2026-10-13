@@ -1,0 +1,19 @@
+node_modules/
+__MACOSX/
+
+# Collected samples are device-identifying and never belong in the repo.
+# They are written under PERSIST_DIR (default /data); these entries catch
+# runs with PERSIST_DIR=. or another in-tree path.
+local-data/
+save/
+
+# Trained models and gallery caches belong to the evaluation pipeline, not
+# to the collection framework.
+*.pt
+*.npz
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/

@@ -1,0 +1,27 @@
+# Paper §5.4 / Table 2, cold-start row (against the DB_T0 gallery plus the
+# new devices' self-enrolments). OPEN-WORLD: gallery = T0 trained (3,303) + unseen self-enrolments,
+# query = each unseen device's last-k chronological traces.
+#
+# Routing: pipeline/cli.py eval --mode vote_unseen dispatches this config
+# to pipeline/eval/eval_coldstart_open.py (NOT the closed-world evaluate.py path).
+#
+# Usage:
+#   python pipeline/cli.py eval --config pipeline/configs/unseen_chrono.yaml \
+#                                --mode vote_unseen \
+#                                --data /path/to/new_devices \
+#                                --models ./out_3k
+
+variant: fixed
+seed: 42
+gpu: true
+
+keys: AUTO9
+batch_size: 256
+dropout: 0.2
+topk: "1,5,10,20"
+
+# k = 1..50 as in the paper's runs (chronological last-k of each unseen device,
+# against gallery = 3,303 T0 prototypes + the unseen cohort's self-enrolments).
+# min-traces=2: a device needs at least 2 traces to enter the eval cohort.
+kshots: "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50"
+min_traces: 2

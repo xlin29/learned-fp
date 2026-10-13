@@ -1,0 +1,33 @@
+# LearnedFP framework — collection-only Node service.
+#
+# Usage:
+#   cd framework
+#   docker compose up --build
+#   open http://localhost:3000
+#
+# All uploaded samples land under ./local-data on the host so anyone
+# can `find local-data -type f` after running an enrollment to confirm
+# files were written. The container is a single Node process; there is
+# no Python, no PyTorch, no model weights — those live in the separate
+# evaluation pipeline (paper Appendix A, Open Science).
+
+services:
+  framework:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    image: learnedfp-framework
+    container_name: learnedfp-framework
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./local-data:/data
+    environment:
+      PORT: "3000"
+      PERSIST_DIR: /data
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+    restart: unless-stopped

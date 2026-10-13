@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Stability / consistency probe</title>
+  <style>
+    body { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; margin: 16px; color: #222; }
+    h1 { font-size: 14px; }
+    .pass { color: #0a7a0a; }
+    .fail { color: #c00; font-weight: bold; }
+    .info { color: #777; font-size: 11px; }
+    #c { border: 1px solid #ccc; }
+    #out > div { padding: 2px 0; }
+  </style>
+</head>
+<body>
+  <h1>Stability / consistency probe</h1>
+  <p>Checks that every extraction path of one paint returns the same bytes
+  (repeated reads, partial vs. full reads, raw pixels vs. PNG exports,
+  <code>toDataURL</code> vs. <code>toBlob</code>) and that the fidelity chosen
+  for a paint holds until the canvas is painted again. All tests must be PASS.</p>
+  <p class="info">Requires the default thresholds: coarse=3, block=20. Each
+  page load starts with a fresh budget; reload to re-run.</p>
+  <canvas id="c" width="200" height="200"></canvas>
+  <div id="out" style="margin-top:10px;">running...</div>
+
+<script>
+(async () => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  // Mixed content: fill + shape + text + stroke + partial alpha.
+  function paint() {
+    ctx.fillStyle = '#f0e0d0';
+    ctx.fillRect(0, 0, 200, 200);
+    ctx.fillStyle = 'rgba(200, 30, 60, 0.8)';
+    ctx.fillRect(20, 20, 80, 80);
+    ctx.fillStyle = '#224488';
+    ctx.font = 'bold 28px serif';
+    ctx.fillText('Hi Axé', 20, 160);
+    ctx.strokeStyle = 'rgba(0, 100, 0, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(120, 120, 60, 60);
+  }
+  paint();
+
+  const results = [];
+  function eq(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+  function lowNibblesZero(a) {
+    for (let i = 0; i < a.length; i += 4) {
+      if ((a[i] & 0x0F) || (a[i+1] & 0x0F) || (a[i+2] & 0x0F)) return false;
+    }
+    return true;
+  }
+  function rec(name, ok) { results.push({ name, ok }); }
+
+  // Reads 1-3 are the only ones that start at full fidelity under the default
+  // thresholds, and the PNG round-trip below reads back through a helper canvas
+  // whose fidelity is decided at its own first read. So the round-trip goes
+  // first: read 1 exports this paint (fixing it at full fidelity), read 2 is
+  // the helper canvas, read 3 the raw readback of the same paint.
+  const url = canvas.toDataURL('image/png');                 // read 1
+  const png = await decodeToPixels(url, 200, 200);           // read 2 (helper canvas)
+  const full = ctx.getImageData(0, 0, 200, 200).data;        // read 3
+  rec('T1 Raw=PNG: getImageData == toDataURL decoded', eq(full, png));
+
+  // Read 4 is past coarseThreshold, but this paint's fidelity was fixed at read 1.
+  const again = ctx.getImageData(0, 0, 200, 200).data;       // read 4
+  rec('T2 Stable: repeated getImageData of one paint is byte-identical (across the budget step at read 4)',
+      eq(full, again));
+
+  // Partial read of the same paint matches the crop of the full read.
+  const partial = ctx.getImageData(50, 50, 100, 100).data;   // read 5
+  const crop = new Uint8ClampedArray(100 * 100 * 4);
+  for (let y = 0; y < 100; y++) {
+    for (let x = 0; x < 100; x++) {
+      const si = ((50 + y) * 200 + (50 + x)) * 4;
+      const di = (y * 100 + x) * 4;
+      crop[di]     = full[si];
+      crop[di + 1] = full[si + 1];
+      crop[di + 2] = full[si + 2];
+      crop[di + 3] = full[si + 3];
+    }
+  }
+  rec('T3 Part=Full: partial read == crop of full', eq(partial, crop));
+
+  // toBlob of the same paint encodes the same bytes as toDataURL did.
+  const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));   // read 6
+  const blobBytes = new Uint8Array(await blob.arrayBuffer());
+  const urlBytes = base64ToBytes(url.slice(url.indexOf(',') + 1));
+  rec('T4 URL=Blob: toDataURL PNG bytes == toBlob PNG bytes', eq(urlBytes, blobBytes));
+
+  // A new paint is re-evaluated against the budget, which is now in the
+  // coarse band: 4-bit output that differs from the full-fidelity paint.
+  paint();
+  const repainted = ctx.getImageData(0, 0, 200, 200).data;   // read 7
+  rec('T5 Repaint: the next paint is re-evaluated (coarse, low nibbles zero, differs from the first paint)',
+      lowNibblesZero(repainted) && !eq(repainted, full));
+
+  render();
+
+  function render() {
+    const out = document.getElementById('out');
+    out.innerHTML = results.map(r =>
+      `<div class="${r.ok ? 'pass' : 'fail'}">[${r.ok ? 'PASS' : 'FAIL'}] ${r.name}</div>`
+    ).join('');
+  }
+
+  function base64ToBytes(b64) {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  async function decodeToPixels(src, w, h) {
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = src; });
+    const helper = document.createElement('canvas');
+    helper.width = w; helper.height = h;
+    const hctx = helper.getContext('2d');
+    hctx.drawImage(img, 0, 0);
+    return hctx.getImageData(0, 0, w, h).data;
+  }
+})();
+</script>
+</body>
+</html>

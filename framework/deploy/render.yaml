@@ -1,0 +1,19 @@
+# Render Blueprint template for the LearnedFP framework.
+#
+# Single Docker web service + a persistent disk for collected samples.
+# The framework is collection-only; no models, no gallery, no Python.
+
+services:
+  - type: web
+    name: learnedfp-framework
+    runtime: docker
+    dockerfilePath: ./deploy/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: PERSIST_DIR
+        value: /data/learnedfp
+    disk:
+      name: learnedfp-data
+      mountPath: /data
+      sizeGB: 2

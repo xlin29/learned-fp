@@ -1,0 +1,3 @@
+{
+  "ignore": ["local-data/**", "../local-data/**"]
+}

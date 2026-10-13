@@ -1,0 +1,22 @@
+# LearnedFP evaluation pipeline dependencies.
+#
+# torch is intentionally NOT pinned to a CUDA build here — the Dockerfile
+# installs the CPU wheels (sufficient for the demo and for code review).
+# To run the full GPU training, override with your site-
+# specific torch+cuXX wheel, e.g.:
+#   pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch
+#
+# scikit-optimize is only needed for the Bayesian variant (train_bayes.py /
+# pipeline/configs/bayes_dp.yaml). Plain Python+torch is enough for the
+# fixed variant (train_fixed.py / fixed_3k.yaml / demo_lab.yaml).
+#
+# Upper bounds sit at the next major version of each package. Last verified
+# end to end (pipeline/demo.sh, and gp_minimize for the Bayesian trainer) with
+# torch 2.14.0, numpy 2.4.6, PyYAML 6.0.3, scikit-optimize 0.10.2 on 2026-09-12.
+
+torch>=2.0,<3.0
+numpy>=1.24,<3
+PyYAML>=6.0,<7
+
+# Bayesian-search trainer only
+scikit-optimize>=0.9,<1

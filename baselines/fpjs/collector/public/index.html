@@ -1,0 +1,84 @@
+<!doctype html>
+<!--
+  FingerprintJS Collector — browser-side fingerprint capture.
+
+  Loads the upstream FingerprintJS library:
+    https://github.com/fingerprintjs/fingerprintjs
+    (Business Source License 1.1; Change License: MIT after 4 years.)
+
+  The script tag pulls the npm dist UMD bundle straight off the local
+  node_modules via /fpjs/lib/fp.umd.min.js, so the captured fingerprint
+  matches the upstream release byte-for-byte. The page POSTs both the
+  visitor id and the per-component values to /fpjs/collect.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>FingerprintJS Collector</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin:0; background:#fff; color:#111; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    .content { padding: 14px 18px; max-width: 760px; }
+    h1 { font-size: 18px; margin: 0 0 8px; }
+    .status { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:14px; }
+    .badge { padding:2px 8px; border-radius:6px; background:#eef2ff; color:#1e40af; font-weight:600; }
+    .hint  { color:#6b7280; }
+    .err   { color:#b91c1c; }
+    pre    { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; padding:8px; background:#f9fafb; border-radius:6px; max-height: 400px; overflow:auto; }
+  </style>
+</head>
+<body>
+  <div class="content">
+    <h1>FingerprintJS Collector</h1>
+    <div class="status">
+      <span class="badge" id="badge">init</span>
+      <span id="text" class="hint">Loading FingerprintJS…</span>
+    </div>
+    <div class="hint" style="margin-bottom:6px;">
+      Captures the visitorId plus per-component values
+      (fonts, fontPreferences, audio, canvas, webGlBasics, webGlExtensions,
+      math, etc.) and POSTs the JSON to <code>/fpjs/collect</code>.
+    </div>
+    <pre id="result">(running)</pre>
+  </div>
+
+  <script src="/fpjs/lib/fp.umd.min.js"></script>
+  <script>
+    const $b = document.getElementById('badge');
+    const $t = document.getElementById('text');
+    const $r = document.getElementById('result');
+    const setStatus = (badge, msg, isErr=false) => {
+      $b.textContent = badge;
+      $t.textContent = msg;
+      $t.classList.toggle('err', !!isErr);
+    };
+
+    (async () => {
+      try {
+        if (!window.FingerprintJS) {
+          setStatus('error', 'FingerprintJS library failed to load', true);
+          return;
+        }
+        setStatus('loading', 'Loading agent…');
+        const fp = await window.FingerprintJS.load();
+        setStatus('running', 'Computing fingerprint…');
+        const result = await fp.get({ extendedResult: true });
+
+        setStatus('uploading', `visitorId=${result.visitorId}`);
+        const resp = await fetch('/fpjs/collect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(result),
+        });
+        const body = await resp.json().catch(() => ({}));
+        setStatus(resp.ok ? 'done' : 'error', resp.ok ? `saved (visitorId=${result.visitorId})` : `upload failed: ${resp.status}`, !resp.ok);
+        $r.textContent = JSON.stringify({ uploadResponse: body, fingerprint: result }, null, 2);
+      } catch (err) {
+        setStatus('error', err.message || 'Capture failed', true);
+        $r.textContent = String(err);
+      }
+    })();
+  </script>
+</body>
+</html>
