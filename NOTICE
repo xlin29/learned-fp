@@ -1,0 +1,53 @@
+LearnedFP - Artifact
+Copyright (c) 2026 Washington State University
+
+This artifact is licensed under the MIT License (see LICENSE). That license
+covers the code written for this artifact. It does not cover the third-party
+components below, which are governed by their own terms.
+
+----------------------------------------------------------------------
+
+DRAWNAPART (NDSS'22)
+  Project: https://github.com/drawnapart/drawnapart
+  Reference: T. Laor et al., "DRAWNAPART: A Device Identification
+             Technique based on Remote GPU Fingerprinting,"
+             NDSS 2022.
+  Used by: baselines/drawnapart/
+
+  The model definition in baselines/drawnapart/dp_keras_baseline.py and
+  the matching layer list in dp_keras_to_torch.py (their get_clf_model
+  and get_triplet_model: three Conv2D(128, 4x4, relu) /
+  Dropout(0.119510) / AveragePooling2D blocks, Dense(256, relu),
+  Dense(256), L2 normalization, softmax head) is taken from the authors'
+  fpstalker_drawnapart.ipynb at commit bddd4f6, with the class count
+  made a parameter, so that the baseline is their architecture rather
+  than a reimplementation of it. The upstream repository carries no
+  license file; the DRAWNAPART authors gave written permission (email,
+  September 2026) to include and redistribute their code in this
+  artifact, on the condition that a link to their repository and full
+  attribution to their paper appear in the header of every bundled
+  file. Those headers are on dp_keras_baseline.py, dp_keras_to_torch.py
+  and released_model.py; the code is not covered by the artifact's MIT
+  License. Their collector is not
+  included; baselines/drawnapart/README.md points to it upstream and
+  documents the trace layout this code reads. Everything else under
+  baselines/drawnapart/ (training driver, scaler, weight conversion and
+  its check, data loading, evaluation pipeline, launcher, CLI, configs,
+  the torch port) is original and MIT-licensed with the rest of the
+  artifact.
+
+----------------------------------------------------------------------
+
+FingerprintJS
+  Project: https://github.com/fingerprintjs/fingerprintjs
+  License: Business Source License 1.1 for the 4.x line used here
+           (Change License: MIT, four years after each version's
+           first release)
+  Used by: baselines/fpjs/collector/
+
+  This artifact does not redistribute the FingerprintJS library. It
+  declares a runtime dependency on @fingerprintjs/fingerprintjs in
+  baselines/fpjs/collector/package.json; npm install fetches the
+  library from the npm registry, where the upstream LICENSE travels
+  with the package. BUSL-1.1 permits non-production use, which covers
+  research and artifact evaluation.

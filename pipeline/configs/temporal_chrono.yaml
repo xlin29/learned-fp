@@ -1,0 +1,27 @@
+# Paper §5.4 / Table 2, temporal row (re-identification against the full
+# DB_T0 gallery). OPEN-WORLD: gallery = ALL 3,303 T0 trained devices, query = each
+# returning device's first-k chronological T+130d traces. Loads encoders trained
+# by configs/fixed_3k.yaml.
+#
+# Routing: pipeline/cli.py eval --mode vote_temporal dispatches this config
+# to pipeline/eval/eval_temporal_open.py (NOT the closed-world evaluate.py path).
+#
+# Usage:
+#   python pipeline/cli.py eval --config pipeline/configs/temporal_chrono.yaml \
+#                                --mode vote_temporal \
+#                                --data /path/to/DB_T0 \
+#                                --t130-dir /path/to/returning_visits \
+#                                --models ./out_3k
+
+variant: fixed
+seed: 42
+gpu: true
+
+keys: AUTO9
+batch_size: 256
+dropout: 0.2
+topk: "1,5,10,20"
+
+# k = 1..100 as in the paper's runs (chronological first-k of each returning
+# device's T+130d traces, against the full 3,303-device T0 prototype gallery).
+kshots: "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100"

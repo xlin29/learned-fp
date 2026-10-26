@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Canvas Runner</title>
+  <style>
+    :root { --primary:#7c3aed; --primary-dark:#5b21b6; --ok:#059669; --bg:#fff; --border:#e5e7eb; --muted:#6b7280; --ink:#111; }
+    html, body { margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:14px; }
+    .row { display:flex; align-items:center; gap:10px; padding:10px 12px; }
+    .pill { display:inline-block; padding:3px 10px; border-radius:999px; font-weight:700; font-size:.78rem; letter-spacing:.04em; text-transform:uppercase; }
+    .pill.run  { background:#fef3c7; color:#92400e; }
+    .pill.done { background:#dcfce7; color:#065f46; }
+    .pill.err  { background:#fee2e2; color:#991b1b; }
+    .progress { flex:1 1 240px; background:#f3f4f6; border-radius:6px; height:10px; overflow:hidden; min-width:120px; }
+    .bar { height:100%; background:linear-gradient(90deg, var(--primary), var(--primary-dark)); width:0%; transition:width .15s; }
+    .meta { color:var(--muted); font-size:14px; line-height:1.55; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; padding:0 12px 10px; }
+    .meta b { color:var(--ink); font-family:inherit; font-weight:700; }
+    .canvas-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, max-content));
+      gap: 8px;
+      justify-content: start;
+      align-items: start;
+      padding: 0 12px 12px;
+    }
+    .canvas-item { width: max-content; }
+    .label { white-space: nowrap; font-size:12px; color:var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <span id="ppPill" class="pill run">Idle</span>
+    <div class="progress"><div id="ppBar" class="bar"></div></div>
+    <span id="ppText">Loading frozen.js…</span>
+  </div>
+  <div class="meta" id="ppMeta"></div>
+
+  <!-- Runtime draw container; HEADLESS mode keeps canvases off the DOM. -->
+  <div id='canvas-root' style='display:none;'></div>
+
+  <script type='module'>
+    // track inflight fetches
+    const __inflightFetches = new Set();
+    const __origFetch = window.fetch;
+    window.fetch = async function wrappedFetch(...args){
+      const p = __origFetch(...args);
+      __inflightFetches.add(p);
+      try { return await p; }
+      finally { __inflightFetches.delete(p); }
+    };
+
+    async function waitForNetworkIdle({ quietMs = 300, maxWaitMs = 60000 } = {}) {
+      const t0 = performance.now();
+      while (true) {
+        if (__inflightFetches.size > 0) {
+          await Promise.allSettled(Array.from(__inflightFetches));
+        }
+        const before = __inflightFetches.size;
+        await new Promise(r => setTimeout(r, quietMs));
+        const after = __inflightFetches.size;
+        if (before === 0 && after === 0) return;
+        if (performance.now() - t0 > maxWaitMs) return;
+      }
+    }
+
+    const $pill = document.getElementById('ppPill');
+    const $text = document.getElementById('ppText');
+    const $bar  = document.getElementById('ppBar');
+    const $meta = document.getElementById('ppMeta');
+
+    function setBar(pct) { if ($bar) $bar.style.width = Math.max(0, Math.min(100, pct)).toFixed(1) + '%'; }
+
+    function setStatus(badge, msg, isError = false) {
+      if ($pill) {
+        if (isError || badge === 'error') {
+          $pill.className = 'pill err'; $pill.textContent = 'Error';
+        } else if (badge === 'done') {
+          $pill.className = 'pill done'; $pill.textContent = 'Done';
+        } else {
+          $pill.className = 'pill run';  $pill.textContent = (badge === 'init') ? 'Initializing' : 'Running';
+        }
+      }
+      if ($text) $text.textContent = msg;
+      try { parent.postMessage({ type: 'canvas-status', badge, msg, error: isError }, '*'); } catch {}
+    }
+
+    function getQuery(name) {
+      return new URLSearchParams(location.search).get(name) || '';
+    }
+
+    function sameOriginUrl(path) {
+      return new URL(path, location.origin).href;
+    }
+
+    // === Progress counter helpers ===
+    function expectedForSrc(src, nsRaw) {
+      if (src === 'visit1') {
+        // visit1 fires 9 keys × N sub-sessions raw pp:canvas events; the
+        // displayed counter scales by 9 (the SCALE constant below) so the
+        // user sees a 0..N progress bar matching the requested ns.
+        const n = Math.max(1, Math.min(100, Number(nsRaw) || 100));
+        return n;
+      }
+      return 9; // v2/v3/v4
+    }
+    // Drives the .progress bar and the status text. expected = ns (number of
+    // sub-sessions); current = sub-sessions completed (events / 9 keys).
+    function updateProgress(current, expected) {
+      const c = Math.max(0, Math.min(current, expected));
+      setBar(expected > 0 ? (c / expected) * 100 : 0);
+      if ($text) $text.textContent = `Drawing samples ${c}/${expected}`;
+    }
+
+    function countRenderedCanvases() {
+      // count both before and after relayout
+      const rootCount = document.querySelectorAll('#canvas-root .pp-canvas-item canvas, #canvas-root canvas').length;
+      const gridCount = document.querySelectorAll('#canvas-grid .canvas-item canvas').length;
+      return Math.max(rootCount, gridCount);
+    }
+
+    function setupCanvasObserver(onChange) {
+      const root = document.getElementById('canvas-root');
+      if (!root) return () => {};
+      const obs = new MutationObserver(() => onChange());
+      obs.observe(root, { childList: true, subtree: true });
+      return () => obs.disconnect();
+    }
+
+
+    function relayoutCanvasesIntoGrid() {
+      const grid = document.getElementById('canvas-grid');
+      const root = document.getElementById('canvas-root');
+      if (!grid || !root) return;
+      const wrappers = Array.from(root.querySelectorAll(':scope > .pp-canvas-item, :scope > .canvas-item'));
+      grid.replaceChildren();
+      for (const container of wrappers) {
+        container.classList.add('canvas-item');
+        const labelEl = container.querySelector('.pp-label, .label') || container.lastElementChild;
+        if (labelEl) {
+          labelEl.classList.add('label');
+          if (!labelEl.style.whiteSpace) labelEl.style.whiteSpace = 'nowrap';
+        }
+        grid.appendChild(container);
+      }
+    }
+
+      async function main() {
+        if (location.protocol === 'file:') {
+          setStatus('error', 'Please open via http or https', true);
+          return;
+        }
+
+      setStatus('init', 'Loading frozen.js…');
+      const t0_script = performance.now();
+
+      // query
+      // ---- robust src parsing: trim + lowercase ----
+      const srcRaw = (getQuery('src') || '').trim().toLowerCase();
+      const src    = (srcRaw === 'visit1') ? srcRaw : 'visit1';
+      const mode        = 'batch';
+
+      const nsRaw       = getQuery('ns');
+      const expected    = expectedForSrc(src, nsRaw);
+      // Honour the requested ns (clamped to [1, 100] — the server caps
+      // NUM_SESSIONS_LOCAL at 100). Falls back to the paper default of 100.
+      const nsToRequest = Math.max(1, Math.min(100, Number(nsRaw) || 100));
+      let drawn = 0;
+      // visit1 fires 9 keys × N sub-sessions raw pp:canvas events. Scale
+      // by the key count so the bar tracks completed sub-sessions.
+      const SCALE = src === 'visit1' ? 9 : 1;
+      const onTick = () => {
+        drawn++;
+        updateProgress(Math.ceil(drawn / SCALE), expected);
+      };
+      window.addEventListener('pp:canvas', onTick, { passive: true });
+      const batchUrl = sameOriginUrl(`/save-batch?src=${encodeURIComponent(src)}`);
+      window.PP_POST_URL = sameOriginUrl(`/save?src=${encodeURIComponent(src)}`);
+
+      const frozenParams = new URLSearchParams();
+      if (src)         frozenParams.set('src', src);
+      frozenParams.set('ns', String(nsToRequest));   // requested sub-session count
+      frozenParams.set('nc', String(Date.now()));
+      const frozenUrl = sameOriginUrl(`/pp/frozen.js?${frozenParams.toString()}`);
+
+      // load runtime
+      let PP, runBATCH;
+      try {
+        PP = await import(frozenUrl);
+        runBATCH =
+          PP.processAndSendCanvasDataBATCH ||
+          (PP.default && PP.default.processAndSendCanvasDataBATCH);
+        if (mode === 'batch' && !runBATCH) {
+          throw new Error('processAndSendCanvasDataBATCH not found in frozen.js');
+        }
+      } catch (e) {
+        console.error(e);
+        setStatus('error', 'Failed to load frozen.js', true);
+        return;
+      }
+
+      // Show the canvas configuration in the meta line.
+      if ($meta) {
+        $meta.innerHTML = `9 keys × ${nsToRequest} · 100×100 RGBA`;
+      }
+
+      // Long Tasks API: every task > 50 ms is what freezes the cursor.
+      // We sum (duration - 50) over the run window — same semantics as the
+      // Web Vitals "Total Blocking Time" metric. Falls back silently when
+      // longtask isn't supported (Safari, older Firefox).
+      let blockingMs = 0;
+      let longTaskObs = null;
+      try {
+        longTaskObs = new PerformanceObserver(list => {
+          for (const e of list.getEntries()) blockingMs += Math.max(0, e.duration - 50);
+        });
+        longTaskObs.observe({ entryTypes: ['longtask'] });
+      } catch { longTaskObs = null; }
+
+      try {
+        const root = document.getElementById('canvas-root');
+        if (root) root.style.display = '';
+        setStatus('draw', 'Rendering keys…');
+        updateProgress(0, expected);
+
+        // Observe canvas creation as a fallback count source (the runtime
+        // can render through OffscreenCanvas without leaving DOM canvases).
+        const stopObs = (typeof setupCanvasObserver === 'function')
+          ? setupCanvasObserver(() => {
+              const n = countRenderedCanvases();
+              const scaled = Math.min(Math.ceil(n / SCALE), expected);
+              if (scaled > Math.ceil(drawn / SCALE)) updateProgress(scaled, expected);
+            })
+          : () => {};
+
+        const batchSummary = await runBATCH(batchUrl);
+
+        await new Promise(requestAnimationFrame);
+        relayoutCanvasesIntoGrid();
+
+        await waitForNetworkIdle({ quietMs: 300, maxWaitMs: 60000 });
+
+        const domCount = (typeof countRenderedCanvases === 'function')
+          ? countRenderedCanvases()
+          : document.querySelectorAll('#canvas-root canvas, #canvas-grid canvas').length;
+        const actual = Math.max(drawn || 0, domCount, 0);
+        const actualScaled = Math.min(Math.ceil(actual / SCALE), expected);
+
+        stopObs();
+        const elapsedMs = performance.now() - t0_script;
+        const t_rounded = Math.round(elapsedMs * 100) / 100;
+
+        // Stop the long-task observer before we render the summary so any
+        // tasks fired by the post-run cleanup don't get attributed to the run.
+        if (longTaskObs) { try { longTaskObs.disconnect(); } catch {} }
+
+        setBar(100);
+        const samples = actual > 0 ? actualScaled : expected;
+        const renderMs = batchSummary?.renderMs ?? null;
+        const uploadMs = batchSummary?.uploadMs ?? null;
+        const longTaskSupported = !!longTaskObs;
+        if ($meta) {
+          $meta.innerHTML +=
+            ` · uploaded <b>${samples}</b>/${expected} samples` +
+            (longTaskSupported ? ` · blocking <b>${blockingMs.toFixed(0)} ms</b>` : '') +
+            (renderMs != null ? ` · render <b>${renderMs.toFixed(0)} ms</b>` : '') +
+            (uploadMs != null ? ` · upload <b>${uploadMs.toFixed(0)} ms</b>` : '');
+        }
+        setStatus('done', `Saved ${samples} samples.`);
+      }
+           catch (e) {
+            console.error(e);
+            setStatus('error', `Failed: ${e.message}`, true);
+          }
+        }
+
+    window.addEventListener('beforeunload', () => setStatus('closing', 'Leaving page…'));
+    main();
+  </script>
+</body>
+</html>

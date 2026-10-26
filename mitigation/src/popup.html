@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>LearnedFP Mitigation</title>
+  <style>
+    body {
+      font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+      margin: 10px; min-width: 360px; color: #222;
+    }
+    h1 { font-size: 13px; margin: 0 0 8px; color: #555; font-weight: 600; }
+    h2 { font-size: 11px; margin: 0 0 4px; color: #777; font-weight: 600; }
+    .row {
+      display: flex; justify-content: space-between; padding: 2px 0;
+      align-items: center;
+    }
+    .row.total {
+      font-weight: 700;
+      border-top: 1px solid #ddd;
+      margin-top: 4px; padding-top: 4px;
+    }
+    .section {
+      margin-top: 10px; border-top: 1px solid #ddd; padding-top: 6px;
+    }
+    .origin-row {
+      display: flex; justify-content: space-between;
+      font-size: 11px; color: #444; padding: 2px 0; align-items: center;
+      gap: 6px;
+    }
+    .origin-row .o {
+      max-width: 170px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      flex-shrink: 1; min-width: 0;
+    }
+    .origin-row .v { white-space: nowrap; }
+    .m-coarse { color: #c07000; }
+    .m-block  { color: #c00; font-weight: 700; }
+    input[type="number"] {
+      width: 52px; font: inherit; padding: 1px 3px;
+      border: 1px solid #ccc; border-radius: 3px;
+    }
+    button { font: inherit; padding: 3px 8px; cursor: pointer; }
+    .hint { color: #999; font-size: 11px; }
+    .chip {
+      display: inline-block; padding: 0 5px; margin-left: 4px;
+      border-radius: 2px; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+    .chip.normal { background: #dcead5; color: #0a7a0a; }
+    .chip.coarse { background: #fdecd0; color: #c07000; }
+    .chip.block  { background: #f9d6d6; color: #c00; }
+    .events-list {
+      font-size: 10px; max-height: 200px; overflow-y: auto;
+      border: 1px solid #eee; padding: 4px; background: #fafafa;
+      border-radius: 3px;
+    }
+    .event-row {
+      display: grid; grid-template-columns: 58px 46px 76px 1fr;
+      gap: 4px; padding: 1px 0; align-items: center;
+    }
+    .event-row .ts { color: #999; }
+    .event-row .mode {
+      font-weight: 600; text-transform: uppercase;
+      font-size: 9px; letter-spacing: 0.3px;
+    }
+    .event-row .mode.normal   { color: #0a7a0a; }
+    .event-row .mode.coarse   { color: #c07000; }
+    .event-row .mode.block    { color: #c00; }
+    .event-row .mode.restored { color: #0070c0; }
+    .event-row .api { color: #444; }
+    .event-row .origin {
+      color: #666; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+    }
+    .btn-row { display: flex; gap: 6px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>LearnedFP Mitigation &middot; v0.1</h1>
+
+  <div class="row"><span>getImageData</span><span id="getImageData">0</span></div>
+  <div class="row"><span>toDataURL</span><span id="toDataURL">0</span></div>
+  <div class="row"><span>toBlob</span><span id="toBlob">0</span></div>
+  <div class="row"><span>convertToBlob <span class="hint">(OffscreenCanvas)</span></span><span id="convertToBlob">0</span></div>
+  <div class="row total"><span>readbacks (total)</span><span id="readback">0</span></div>
+  <div class="row">
+    <span>normal / coarse / block</span>
+    <span>
+      <span id="cnt-normal">0</span> /
+      <span class="m-coarse" id="cnt-coarse">0</span> /
+      <span class="m-block" id="cnt-block">0</span>
+    </span>
+  </div>
+  <div class="row">
+    <span>display-restore <span class="hint">(put rewrites)</span></span>
+    <span id="restored" style="color:#0070c0;font-weight:700;">0</span>
+  </div>
+
+  <div class="section">
+    <h2>thresholds (per-frame budget)</h2>
+    <div class="row">
+      <span>normal &rarr; coarse after</span>
+      <span><input type="number" id="coarseThreshold" min="0" value="3"> reads</span>
+    </div>
+    <div class="row">
+      <span>coarse &rarr; block after</span>
+      <span><input type="number" id="blockThreshold" min="0" value="20"> reads</span>
+    </div>
+    <div class="hint">set both to 0 for max strictness (every read = block).</div>
+  </div>
+
+  <div class="section">
+    <h2>per-origin</h2>
+    <div id="origins"><div class="hint">(none yet)</div></div>
+  </div>
+
+  <div class="section">
+    <h2>recent events (latest, max 200)</h2>
+    <div id="events" class="events-list"><div class="hint">(none yet)</div></div>
+  </div>
+
+  <div class="btn-row">
+    <button id="reset">reset (this tab)</button>
+    <button id="downloadEvents">download JSON</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Display-restore probe</title>
+  <style>
+    body { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; margin: 16px; color: #222; }
+    h1 { font-size: 14px; }
+    .pass { color: #0a7a0a; }
+    .fail { color: #c00; font-weight: bold; }
+    .info { color: #777; font-size: 11px; }
+    canvas { border: 1px solid #ccc; }
+    .col { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
+    .panel { text-align: center; }
+    .caption { font-size: 11px; margin-bottom: 4px; }
+    code { background: #f6f6f6; padding: 1px 4px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <h1>Display-restore probe</h1>
+  <p>Verifies that <code>getImageData → putImageData</code> round-trip restores real pixels for visual display, while extracted bytes stay sanitized.</p>
+  <p class="info">Requires the default thresholds: coarse=3, block=20. The page
+  first spends the frame's budget on a scratch canvas, so the source canvas is
+  read in block mode: the sanitized bytes are uniform gray and the
+  display-restore is visually obvious. Each page load starts with a fresh
+  budget; reload to re-run.</p>
+
+  <div class="col">
+    <div class="panel">
+      <div class="caption">source<br>(drawn natively)</div>
+      <canvas id="src" width="120" height="120"></canvas>
+    </div>
+    <div class="panel">
+      <div class="caption">display<br>(after get → put = restore)</div>
+      <canvas id="display" width="120" height="120"></canvas>
+    </div>
+    <div class="panel">
+      <div class="caption">what server sees<br>(extracted bytes drawn fresh)</div>
+      <canvas id="upload" width="120" height="120"></canvas>
+    </div>
+    <div class="panel">
+      <div class="caption">tampered (no restore)<br>(page mutated bytes before put)</div>
+      <canvas id="tampered" width="120" height="120"></canvas>
+    </div>
+  </div>
+  <div id="out">running...</div>
+
+<script>
+(() => {
+  function paint(ctx) {
+    ctx.fillStyle = '#ff3366';
+    ctx.fillRect(0, 0, 120, 120);
+    ctx.fillStyle = 'rgba(30, 150, 200, 0.85)';
+    ctx.fillRect(20, 20, 80, 80);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 22px serif';
+    ctx.fillText('Hi!', 36, 70);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(10, 10, 100, 100);
+  }
+
+  function isUniformGray(a) {
+    for (let i = 0; i < a.length; i += 4) {
+      if (a[i] !== 127 || a[i+1] !== 127 || a[i+2] !== 127 || a[i+3] !== 255) return false;
+    }
+    return true;
+  }
+
+  // --- Spend the budget on a scratch canvas (blockThreshold = 20 at the
+  // defaults), so the source canvas's first read below is a block read. ---
+  const scratch = document.createElement('canvas');
+  scratch.width = 8; scratch.height = 8;
+  const sctx = scratch.getContext('2d');
+  sctx.fillStyle = '#fff';
+  sctx.fillRect(0, 0, 8, 8);
+  for (let i = 0; i < 20; i++) sctx.getImageData(0, 0, 8, 8);
+
+  // --- Source: native draw ---
+  const src = document.getElementById('src');
+  paint(src.getContext('2d'));
+
+  // --- Read sanitized bytes (this is what "the server" gets) ---
+  const data = src.getContext('2d').getImageData(0, 0, 120, 120);
+  const uploadedBytes = new Uint8ClampedArray(data.data); // freeze a copy
+
+  // --- Put on display: display-restore should swap originals back ---
+  const display = document.getElementById('display');
+  display.getContext('2d').putImageData(data, 0, 0);
+
+  // --- "What the server sees": clone the bytes, put on a separate canvas.
+  // The clone is a different array → sanitizedOrigin map miss → no restore. ---
+  const upload = document.getElementById('upload');
+  const cloned = new ImageData(new Uint8ClampedArray(uploadedBytes), 120, 120);
+  upload.getContext('2d').putImageData(cloned, 0, 0);
+
+  // --- Tampered: read fresh bytes, mutate one pixel, then put.
+  // Restore should NOT fire (bytesEqual fails) → display shows sanitized. ---
+  const tamperedData = src.getContext('2d').getImageData(0, 0, 120, 120);
+  tamperedData.data[0] = (tamperedData.data[0] + 1) & 0xFF;
+  const tampered = document.getElementById('tampered');
+  tampered.getContext('2d').putImageData(tamperedData, 0, 0);
+
+  // --- Assertions ---
+  const results = [];
+  function rec(name, ok, note) { results.push({ name, ok, note }); }
+
+  rec('extracted bytes are sanitized (uniform gray in block mode)',
+      isUniformGray(uploadedBytes),
+      isUniformGray(uploadedBytes) ? '' : 'thresholds are not at the defaults, or the budget was not exhausted; bytes carry residual content');
+
+  rec('put-back canvas operations did not throw', true);
+
+  document.getElementById('out').innerHTML = results.map(r =>
+    `<div class="${r.ok ? 'pass' : 'fail'}">[${r.ok ? 'PASS' : 'FAIL'}] ${r.name}${r.note ? ' &mdash; ' + r.note : ''}</div>`
+  ).join('') + `
+    <div class="info" style="margin-top:10px;">
+      <b>Visual check</b> (programmatic introspection can't see real pixels because every readback goes through our sanitize pipeline):
+      <ul style="margin: 4px 0 0 18px; padding: 0;">
+        <li><b>source</b> shows the drawn picture (native render, never touched).</li>
+        <li><b>display</b> should match <b>source</b> &mdash; if so, display-restore worked: the page received sanitized bytes for upload, and our put-time substitution gave the visible canvas back the originals.</li>
+        <li><b>what server sees</b> shows what the page actually transmits &mdash; in block mode this is uniform gray.</li>
+        <li><b>tampered</b> shows that mutating bytes between get and put suppresses restore &mdash; the page's edit is preserved (the sanitized gray with one pixel offset).</li>
+      </ul>
+      <span class="pass">If display matches source AND server-sees is gray:</span> display-restore is doing its job.
+    </div>
+  `;
+})();
+</script>
+</body>
+</html>

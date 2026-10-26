@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Samples</title>
+  <style>
+    html,body{margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#fff;color:#111}
+    .wrap{padding:10px 12px}
+    h3{margin:0 0 8px;font-size:0.95rem}
+    .kv{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px}
+    .kv span{background:#f3f4f6;padding:3px 8px;border-radius:999px;font-size:11px}
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px}
+    .err{color:#ef4444;font-size:13px}
+    .key-block{margin-top:8px}
+    .key-head{font-weight:700;font-size:13px;margin-bottom:4px}
+    .key-head .count{color:#6b7280;font-weight:400;font-size:11px;margin-left:4px}
+    .tile{display:inline-block;margin:3px;text-align:center;vertical-align:top}
+    .tile canvas{image-rendering:pixelated;width:80px;height:80px;border:1px solid #ddd;background:#fff;display:block}
+    .tile .name{font-size:9px;color:#6b7280;margin-top:2px;width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  </style>
+</head>
+<body>
+  <div class="wrap" id="root">Loading…</div>
+
+  <script>
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // map server keys → paper-style display names (§4.1 / Figure 2)
+  const KEY_LABELS = {
+    'raw_faces':'EmojiFace','faces':'EmojiFace',
+    'raw_persons':'EmojiPeople','persons':'EmojiPeople',
+    'raw_travel':'EmojiObject','travel':'EmojiObject',
+    'raw_hands':'EmojiHand','hands':'EmojiHand',
+    'a-randomString':'RandChar',
+    'moire':'MoireLine',
+    'raw_randomFont':'GlyphSet','randomFont':'GlyphSet',
+    'gradQuantSteps':'GradStep',
+    'shadowBlurProbe':'ShadowBlur'
+  };
+  const labelFor = k => KEY_LABELS[k] || k;
+  const KEY_ORDER = ['EmojiFace','EmojiPeople','EmojiObject','EmojiHand','GlyphSet','MoireLine','RandChar','GradStep','ShadowBlur'];
+  const sortByPaperOrder = keys => keys.slice().sort((a, b) => {
+    const ia = KEY_ORDER.indexOf(labelFor(a)), ib = KEY_ORDER.indexOf(labelFor(b));
+    if (ia >= 0 && ib >= 0) return ia - ib;
+    if (ia >= 0) return -1;
+    if (ib >= 0) return 1;
+    return labelFor(a).localeCompare(labelFor(b));
+  });
+
+  async function drawRgbaTo(canvas, relPath){
+    const buf = await fetch('/image?path=' + encodeURIComponent(relPath)).then(r => r.arrayBuffer());
+    const u8 = new Uint8ClampedArray(buf);
+    const W = 100, H = 100;
+    if (u8.length !== W*H*4) {
+      const ctx = canvas.getContext('2d'); ctx.fillText('size?', 2, 12);
+      return;
+    }
+    canvas.width = W; canvas.height = H;
+    canvas.getContext('2d').putImageData(new ImageData(u8, W, H), 0, 0);
+  }
+
+  (async () => {
+    const root = document.getElementById('root');
+    let r;
+    try { r = await fetch('/images').then(res => res.json()); }
+    catch (err) { root.innerHTML = `<div class="err">Failed to load: ${escapeHtml(err.message)}</div>`; return; }
+    if (!r.ok) { root.innerHTML = `<div class="err">Server error: ${escapeHtml(r.error || 'unknown')}</div>`; return; }
+    const keys = sortByPaperOrder(Object.keys(r.byKey));
+    if (keys.length === 0) {
+      root.innerHTML = `<h3>Samples</h3><div class="err">No saved images for this device yet.</div>`;
+      return;
+    }
+
+    const SAMPLES_PER_KEY = 10;
+    const sections = keys.map(k => {
+      const total = (r.byKey[k] || []).length;
+      const files = (r.byKey[k] || []).slice(0, SAMPLES_PER_KEY);
+      const tiles = files.map((rel, i) =>
+        `<div class="tile">
+           <canvas id="img_${escapeHtml(k)}_${i}"></canvas>
+           <div class="name mono" title="${escapeHtml(rel)}">${escapeHtml(rel.split('/').pop())}</div>
+         </div>`
+      ).join('');
+      return `<div class="key-block">
+        <div class="key-head">${escapeHtml(labelFor(k))}<span class="count">${files.length}/${total} shown</span></div>
+        <div>${tiles}</div>
+      </div>`;
+    }).join('');
+
+    root.innerHTML = `
+      <h3>Samples</h3>
+      <div class="kv">
+        <span>keys: ${keys.length}</span>
+        <span>showing up to ${SAMPLES_PER_KEY} per key</span>
+      </div>
+      ${sections}
+    `;
+
+    for (const k of keys) {
+      const files = (r.byKey[k] || []).slice(0, SAMPLES_PER_KEY);
+      for (let i = 0; i < files.length; i++) {
+        const cv = document.getElementById(`img_${k}_${i}`);
+        if (cv) drawRgbaTo(cv, files[i]).catch(() => {});
+      }
+    }
+  })();
+  </script>
+</body>
+</html>

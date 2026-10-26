@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Budget probe</title>
+  <style>
+    body { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; margin: 16px; color: #222; }
+    h1 { font-size: 14px; }
+    .pass { color: #0a7a0a; }
+    .fail { color: #c00; font-weight: bold; }
+    .info { color: #777; font-size: 11px; }
+    .col { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+    .col > div { text-align: center; }
+    canvas { border: 1px solid #ccc; display: block; }
+    .caption { font-size: 11px; margin-bottom: 2px; }
+  </style>
+</head>
+<body>
+  <h1>Budget probe</h1>
+  <p>Reads a canvas 30 times, repainting it before most reads, and observes the
+  <b>normal &rarr; coarse &rarr; block</b> downgrade of the per-frame budget.
+  The fidelity of a paint is decided by the budget at its first read and then
+  holds for every further read of that paint, so reads 4-5 (no repaint after
+  read 3) must still match read 3, and reads 21-22 (no repaint after read 20)
+  must still match read 20.</p>
+  <p class="info">Requires the default thresholds: coarse=3, block=20. Each
+  page load starts with a fresh budget; reload to re-run. The <i>source
+  canvas</i> is what the browser paints on screen (always unchanged); the other
+  three show what scripts receive via extraction.</p>
+
+  <div class="col">
+    <div>
+      <div class="caption">source canvas (on-screen)</div>
+      <canvas id="c" width="100" height="100"></canvas>
+    </div>
+    <div>
+      <div class="caption">read #1 &mdash; normal</div>
+      <canvas id="r1" width="100" height="100"></canvas>
+    </div>
+    <div>
+      <div class="caption">read #10 &mdash; coarse</div>
+      <canvas id="r10" width="100" height="100"></canvas>
+    </div>
+    <div>
+      <div class="caption">read #25 &mdash; block</div>
+      <canvas id="r25" width="100" height="100"></canvas>
+    </div>
+  </div>
+
+  <div id="out" style="margin-top:12px;">running...</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  // Deterministic mixed content; every call is a new paint.
+  function paint() {
+    ctx.fillStyle = '#ff3366';
+    ctx.fillRect(0, 0, 100, 100);
+    ctx.fillStyle = 'rgba(30, 150, 200, 0.85)';
+    ctx.fillRect(20, 20, 60, 60);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 16px serif';
+    ctx.fillText('Hi', 40, 55);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(10, 10, 80, 80);
+  }
+
+  // Reads 4-5 and 21-22 re-read the previous paint; every other read
+  // follows a fresh paint. Fresh paints are compared only on the property
+  // of their band, not byte for byte: the browser itself may rasterize a
+  // canvas differently once it has been read back a few times (Chrome moves
+  // such a canvas to software rasterization), which shifts anti-aliased
+  // edges by a level or two before the bytes ever reach the extension.
+  const reads = [];
+  for (let i = 1; i <= 30; i++) {
+    const rereadsPrevious = (i === 4 || i === 5 || i === 21 || i === 22);
+    if (!rereadsPrevious) paint();
+    reads.push(ctx.getImageData(0, 0, 100, 100).data);
+  }
+  const read = (i) => reads[i - 1];
+
+  showOn('r1',  read(1));
+  showOn('r10', read(10));
+  showOn('r25', read(25));
+
+  const results = [];
+  function add(name, ok) { results.push({ name, ok }); }
+  function eqBytes(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+  function allLowNibbleZero(a) {
+    for (let i = 0; i < a.length; i += 4) {
+      if ((a[i] & 0x0F) || (a[i+1] & 0x0F) || (a[i+2] & 0x0F)) return false;
+    }
+    return true;
+  }
+  function isUniformGray(a) {
+    for (let i = 0; i < a.length; i += 4) {
+      if (a[i] !== 127 || a[i+1] !== 127 || a[i+2] !== 127 || a[i+3] !== 255) return false;
+    }
+    return true;
+  }
+
+  add('reads 1-3 (normal, fresh paints) keep full precision (low RGB nibbles present)',
+      !allLowNibbleZero(read(1)) && !allLowNibbleZero(read(2)) && !allLowNibbleZero(read(3)));
+  add('reads 4-5 (same paint as read 3) are byte-identical to read 3',
+      eqBytes(read(3), read(4)) && eqBytes(read(3), read(5)));
+  add('reads 6-20 (coarse, fresh paints) have low RGB nibbles zeroed',
+      allLowNibbleZero(read(6)) && allLowNibbleZero(read(10)) && allLowNibbleZero(read(20)));
+  add('reads 21-22 (same paint as read 20) are byte-identical to read 20',
+      eqBytes(read(20), read(21)) && eqBytes(read(20), read(22)));
+  add('reads 23+ (block, fresh paints) are uniform gray (127,127,127,255)',
+      isUniformGray(read(23)) && isUniformGray(read(30)));
+
+  document.getElementById('out').innerHTML = results.map(r =>
+    `<div class="${r.ok ? 'pass' : 'fail'}">[${r.ok ? 'PASS' : 'FAIL'}] ${r.name}</div>`
+  ).join('');
+
+  function showOn(id, data) {
+    const c = document.getElementById(id);
+    const g = c.getContext('2d');
+    const im = new ImageData(new Uint8ClampedArray(data), 100, 100);
+    g.putImageData(im, 0, 0);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+# Machine-readable citation metadata for this artifact (CFF v1.2.0).
+# Schema: https://citation-file-format.github.io/
+
+cff-version: 1.2.0
+message: "If you use this artifact, please cite the accompanying paper."
+type: software
+title: "LearnedFP - Artifact"
+abstract: >-
+  Source code for "When Tracking Learns: Learning-Based Browser
+  Fingerprinting Under Anti-Fingerprinting Defenses." Includes the
+  collection framework, lab samples, evaluation pipeline,
+  metadata-consistency check, defense-detection probe, Web Audio
+  experiment, mitigation-prototype browser extension, and the code
+  used to run and evaluate the DRAWNAPART and FingerprintJS baselines.
+license: MIT
+version: "1.0.1"
+date-released: 2026-09-18
+doi: 10.5281/zenodo.22698139
+repository-code: "https://github.com/xlin29/learned-fp"
+authors:
+  - family-names: Lin
+    given-names: Xu
+    affiliation: Washington State University
+
+preferred-citation:
+  type: conference-paper
+  title: >-
+    When Tracking Learns: Learning-Based Browser Fingerprinting Under
+    Anti-Fingerprinting Defenses
+  year: 2026
+  authors:
+    - family-names: Lin
+      given-names: Xu
+      affiliation: Washington State University
+  conference:
+    name: "ACM Conference on Computer and Communications Security (CCS)"
